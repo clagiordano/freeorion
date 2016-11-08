@@ -56,5 +56,5 @@ script:
     fi
   - >
     if [[ "${BUILD_OSX}" == "true" ]]; then
-      xcodebuild -project FreeOrion.xcodeproj -configuration build
+      xcodebuild -project FreeOrion.xcodeproj -configuration Release -alltargets
     fi
