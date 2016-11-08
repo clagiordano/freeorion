@@ -1185,6 +1185,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				3ABEAB3B1749BFED00E34912 /* freeorioncommon.dylib in Frameworks */,
+				3ABEAB3F1749C27700E34912 /* libboost_filesystem.a in Frameworks */,
+				82714D771ADABE680071A329 /* libboost_log.a in Frameworks */,
+				3ABEAB741749C36200E34912 /* libboost_system.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
