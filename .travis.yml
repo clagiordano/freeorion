@@ -49,8 +49,12 @@ before_script:
       cd Xcode
     fi
 script:
-  - cmake ..
   - >
     if [[ "${BUILD_APIDOC}" == "true" && "${TRAVIS_BRANCH}" == "master" ]]; then
+      cmake ..
       cmake --build . --target apidoc-deploy
+    fi
+  - >
+    if [[ "${BUILD_OSX}" == "true" ]]; then
+      xcodebuild -project FreeOrion.xcodeproj -configuration build
     fi
