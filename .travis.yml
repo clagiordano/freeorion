@@ -35,6 +35,8 @@ install:
       hdiutil attach FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08.dmg
       tar -xjf /Volumes/FreeOrionSDK/dep.tar.bz2 -C Xcode
       hdiutil detach /Volumes/FreeOrionSDK
+      lipo -info Xcode/dep/lib/libboost_chrono.a
+      return 1
     fi
 before_script:
   # Configure git to use the identity of FreeOrion Build Bot and
