@@ -43,6 +43,6 @@ before_script:
 script:
   - cmake ..
   - >
-    if [[ "${BUILD_APIDOC}" == "true" ]]; then
+    if [[ "${BUILD_APIDOC}" == "true" && "${TRAVIS_BRANCH}" == "master" ]]; then
       cmake --build . --target apidoc-deploy
     fi
