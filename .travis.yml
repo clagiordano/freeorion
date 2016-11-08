@@ -39,8 +39,15 @@ before_script:
       git config --global credential.helper "cache --timeout=300"
       echo -e "url=https://freeorion-bot:${FreeOrion_AUTH_TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git\n" | git credential approve
     fi
-  - mkdir build
-  - cd build
+  - >
+    if [[ "${BUILD_APIDOC}" == "true" ]]; then
+      mkdir build
+      cd build
+    fi
+  - >
+    if [[ "${BUILD_OSX}" == "true" ]]; then
+      cd Xcode
+    fi
 script:
   - cmake ..
   - >
