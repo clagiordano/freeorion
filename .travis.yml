@@ -29,6 +29,13 @@ install:
       # Install dependencies
       sudo apt-get install -qq cmake python doxygen python2.7-dev libfreetype6-dev libglew-dev libopenal-dev libogg-dev libvorbis-dev zlib1g-dev libsdl2-dev mesa-common-dev python libpng12-dev libboost1.54-dev libboost-thread1.54-dev libboost-system1.54-dev libboost-signals1.54-dev libboost-serialization1.54-dev libboost-regex1.54-dev libboost-python1.54-dev libboost-log1.54-dev libboost-iostreams1.54-dev libboost-locale1.54-dev libboost-filesystem1.54-dev libboost-date-time1.54-dev
     fi
+  - >
+    if [[ "${BUILD_OSX}" == "true" ]]; then
+      wget https://github.com/freeorion/freeorion-sdk/releases/download/FreeOrionSDK_v0.4.6-1/FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08.dmg
+      hdiutil attach FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08.dmg
+      tar -xjf /Volumes/FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08/dep.tar.bz2 -C Xcode
+      hdiutil detach /Volumes/FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08
+    fi
 before_script:
   # Configure git to use the identity of FreeOrion Build Bot and
   # load credentials
