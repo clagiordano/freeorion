@@ -33,8 +33,8 @@ install:
     if [[ "${BUILD_OSX}" == "true" ]]; then
       wget https://github.com/freeorion/freeorion-sdk/releases/download/FreeOrionSDK_v0.4.6-1/FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08.dmg
       hdiutil attach FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08.dmg
-      tar -xjf /Volumes/FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08/dep.tar.bz2 -C Xcode
-      hdiutil detach /Volumes/FreeOrionSDK_Clang-MacOSX-10.7-i386_2016-11-08
+      tar -xjf /Volumes/FreeOrionSDK/dep.tar.bz2 -C Xcode
+      hdiutil detach /Volumes/FreeOrionSDK
     fi
 before_script:
   # Configure git to use the identity of FreeOrion Build Bot and
