@@ -3,7 +3,7 @@ Italiano
 # This is the Italian String Table file for FreeOrion
 #
 # Translators:
-# * Claudio Giordano <claudio.giordano(at)autistici.org>
+# * Claudio Giordano (Shining) <claudio.giordano(at)autistici.org>
 #
 # Notes: to avoid potential conflict with functional keys in other files, do not
 # make any stringtable keys beginning with "FUNCTIONAL_".
@@ -38,7 +38,7 @@ SAVE
 Salva
 
 DELETE
-Delete
+Elimina
 
 OPEN
 Apri
@@ -201,6 +201,9 @@ Regione Inesplorata
 UNEXPLORED_SYSTEM
 Sistema Inesplorato
 
+NOT_APPLICABLE
+N/A
+
 BOMBER
 Bombardiere
 
@@ -212,6 +215,9 @@ Impero Terrestre
 
 DEFAULT_PLAYER_NAME
 Giocatore_Umano
+
+MONSTER
+Mostro
 
 PASSED
 <rgba 0 255 0 255>(PASSATO)</rgba>
@@ -225,15 +231,95 @@ Tutto Di:
 ANY_OF
 Qualunque Di:
 
+DUMP
+Debug Data Dump
+
+UNOWNED
+Senza proprietario
+
+NOWHERE
+Non può essere prodotto
+
+# Prefix to use for menu items that will open a pedia entry
+POPUP_MENU_PEDIA_PREFIX
+'''Aiuto: '''
 
 ##
 ## Major errors
 ##
 
+ERROR_SOUND_INITIALIZATION_FAILED
+'''OpenAL audio system initialization failed.
+Check log files for more detailed messages.
+'''
+
+# Used as a prefix for the FORMAT_LIST_[1-MANY]_ITEMS translation entries.
+FORMAT_LIST_DEFAULT_PLURAL_HEADER
+Ci sono:
+
+# Used as a prefix for the FORMAT_LIST_0_ITEMS translation entry.
+FORMAT_LIST_DEFAULT_SINGLE_HEADER
+C'è uno:
+
+FORMAT_LIST_DEFAULT_EMPTY_HEADER
+Non ce ne sono.
+
+# Used as a prefix for the FORMAT_LIST_[0-MANY]_ITEMS translation entries.
+FORMAT_LIST_DEFAULT_DUAL_HEADER
+Ci sono:
+
+FORMAT_LIST_0_ITEMS
+%1%
+
+FORMAT_LIST_1_ITEMS
+%1% %2%.
+
+FORMAT_LIST_2_ITEMS
+%1% %2% and %3%.
+
+FORMAT_LIST_3_ITEMS
+%1% %2%, %3% and %4%.
+
+FORMAT_LIST_4_ITEMS
+%1% %2%, %3%, %4% and %5%.
+
+FORMAT_LIST_5_ITEMS
+%1% %2%, %3%, %4%, %5% and %6%.
+
+FORMAT_LIST_6_ITEMS
+%1% %2%, %3%, %4%, %5%, %6% and %7%.
+
+FORMAT_LIST_7_ITEMS
+%1% %2%, %3%, %4%, %5%, %6%, %7% and %8%.
+
+FORMAT_LIST_8_ITEMS
+%1% %2%, %3%, %4%, %5%, %6%, %7%, %8% and %9%.
+
+FORMAT_LIST_9_ITEMS
+%1% %2%, %3%, %4%, %5%, %6%, %7%, %8%, %9% and %10%.
+
+FORMAT_LIST_10_ITEMS
+%1% %2%, %3%, %4%, %5%, %6%, %7%, %8%, %9%, %10% and %11%.
+
+FORMAT_LIST_MANY_ITEMS
+%1% %2%, %3%, %4%, %5%, %6%, %7%, %8%, %9%, %10%, %11% ...
+
 
 ##
 ## Predefined Ship Designs (located in default/scripting/ship_designs/)
 ##
+
+SD_CARRIER
+Prototipo Trasportatore
+
+SD_CARRIER_DESC
+Progetto del prototipo che lancia i combattenti in battaglia invece di usare le armi a fuoco diretto.
+
+SD_FLAK
+Prototype Flak Ship
+
+SD_FLAK_DESC
+Prototype design that uses flak cannons as a cheap fighter countermeasure.
 
 SD_SCOUT
 Esploratore
