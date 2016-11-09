@@ -393,7 +393,7 @@ Fregata (L2)
 SD_MARK4_DESC
 Fregata da pattugliamento migliorata armata di laser. Può essere costruita solo su una colonia con un [[buildingtype BLD_SHIPYARD_BASE]].
 
-D_LARGE_MARK_1
+SD_LARGE_MARK_1
 Destroyer (M1)
 
 SD_LARGE_MARK1_DESC
@@ -482,6 +482,114 @@ Gravitic Battleship (P)
 
 SD_GRAVITATING1_DESC
 Massiccia nave da guerra armata e protetta con gli ultimi ritrovati tecnologici. Fissato il prezzo di conseguenza.
+
+SD_GRAVITATING2
+Gravitic Battleship (D)
+
+SD_GRAVITATING2_DESC
+Large state-of-art battleship armed and protected with the latest technology. Priced accordingly. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]], an [[buildingtype BLD_SHIPYARD_ORBITAL_DRYDOCK]], and a [[buildingtype BLD_SHIPYARD_CON_GEOINT]].
+
+SD_ROBO_TITAN1
+Dreadnaught
+
+SD_ROBO_TITAN1_DESC
+Large state-of-art battleship armed and protected with the latest technology. Priced accordingly. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]], an [[buildingtype BLD_SHIPYARD_ORBITAL_DRYDOCK]], and a [[buildingtype BLD_SHIPYARD_CON_GEOINT]].
+
+SD_ORGANIC1
+Organic Frigate (M1)
+
+SD_ORGANIC1_DESC
+Organic fighter with preliminary weaponry and defence technology. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]].
+
+SD_ORGANIC2
+Organic Frigate (M2)
+
+SD_ORGANIC2_DESC
+Organic fighter with improved armour. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]].
+
+SD_ORGANIC3
+Organic Frigate (L)
+
+SD_ORGANIC3_DESC
+Organic fighter with heavy lasers and armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]].
+
+SD_SHIELD_BUG_1
+Organic Heavy Frigate (M)
+
+SD_SHIELD_BUG_1_DESC
+Organic fighter with [[encyclopedia SHIELDS_TITLE]]. Effective against enemies with poor weapons. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]].
+
+SD_SHIELD_BUG_2
+Organic Heavy Frigate (L)
+
+SD_SHIELD_BUG_2_DESC
+Organic fighter with [[encyclopedia SHIELDS_TITLE]]. Effective against enemies with poor weapons. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]].
+
+SD_AST_1
+Rock Destroyer (L)
+
+SD_AST_1_DESC
+A hollowed-out asteroid armed with lasers. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] in a system with an [[buildingtype BLD_SHIPYARD_AST]].
+
+SD_AST_2
+Rock Destroyer (P1)
+
+SD_AST_2_DESC
+A hollowed-out asteroid armed with plasma cannons. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] in a system with an [[buildingtype BLD_SHIPYARD_AST]].
+
+SD_AST_3
+Rock Destroyer (P2)
+
+SD_AST_3_DESC
+A hollowed-out asteroid armed with heavy plasma cannons and reformed rock armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] in a system with an [[buildingtype BLD_SHIPYARD_AST]]. An [[buildingtype BLD_SHIPYARD_AST_REF]] is also required in any system owned by the empire.
+
+SD_HEAVY_AST_1
+Rock Battleship (L)
+
+SD_HEAVY_AST_1_DESC
+A large hollowed-out asteroid armed with lasers. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] in a system with an [[buildingtype BLD_SHIPYARD_AST]].
+
+SD_HEAVY_AST_2
+Rock Battleship (P)
+
+SD_HEAVY_AST_2_DESC
+A large hollowed-out asteroid armed with heavy plasma cannons and reformed rock plate. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] in a system with an [[buildingtype BLD_SHIPYARD_AST]]. An [[buildingtype BLD_SHIPYARD_AST_REF]] is also required in any system owned by the empire.
+
+SD_CRYSTAL
+Crystal Destroyer (P)
+
+SD_CRYSTAL_DESC
+A crystallized asteroid armed with heavy plasma cannons and crystal rock armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] in a system with an [[buildingtype BLD_SHIPYARD_AST]]. An [[buildingtype BLD_SHIPYARD_AST_REF]] is also required in any system owned by the empire.
+
+SD_ENDO_1
+Endomorphic Cruiser (L)
+
+SD_ENDO_1_DESC
+Advanced endomorphic fighter with heavy weaponry and armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]], an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]], and a [[buildingtype BLD_SHIPYARD_ORG_XENO_FAC]].
+
+SD_ENDO_2
+Endomorphic Cruiser (P1)
+
+SD_ENDO_2_DESC
+Advanced endomorphic fighter with heavy weaponry and armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]], an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]], and a [[buildingtype BLD_SHIPYARD_ORG_XENO_FAC]].
+
+SD_ENDO_3
+Endomorphic Cruiser (P2)
+
+SD_ENDO_3_DESC
+Advanced endomorphic fighter with heavy weaponry and diamond armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]], an [[buildingtype BLD_SHIPYARD_ORG_ORB_INC]], and a [[buildingtype BLD_SHIPYARD_ORG_XENO_FAC]].
+
+SD_FRACTAL_1
+Fractal Battleship (P)
+
+SD_FRACTAL_1_DESC
+An exotic warship made of fractal energy. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ENRG_COMP]], in systems with [[STAR_BLUE]], [[STAR_WHITE]] or [[STAR_BLACK]] star types.
+
+SD_FRACTAL_2
+Fractal Battleship (D)
+
+SD_FRACTAL_2_DESC
+An exotic warship made of fractal energy. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ENRG_COMP]], in systems with [[STAR_BLUE]], [[STAR_WHITE]] or [[STAR_BLACK]] star types.
 
 SD_COLONY_SHIP
 Nave Colonizzatrice
