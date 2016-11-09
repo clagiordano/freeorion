@@ -393,6 +393,93 @@ Fregata (L2)
 SD_MARK4_DESC
 Fregata da pattugliamento migliorata armata di laser. Può essere costruita solo su una colonia con un [[buildingtype BLD_SHIPYARD_BASE]].
 
+D_LARGE_MARK_1
+Destroyer (M1)
+
+SD_LARGE_MARK1_DESC
+Basic mass-driver fighter. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]].
+
+SD_LARGE_MARK_2
+Destroyer (M2)
+
+SD_LARGE_MARK2_DESC
+Improved mass-driver fighter. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]].
+
+SD_LARGE_MARK_3
+Cruiser (L1)
+
+SD_LARGE_MARK3_DESC
+Improved fighter with lasers. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]].
+
+SD_LARGE_MARK_4
+Cruiser (L2)
+
+SD_LARGE_MARK4_DESC
+Improved fighter with heavy lasers and armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]].
+
+SD_ROBOTIC_OUTPOST
+Robotic Outpost
+
+SD_ROBOTIC_OUTPOST_DESC
+Can establish outposts on faraway worlds.
+
+SD_ROBOTIC_COLONY
+Robotic Colony
+
+SD_ROBOTIC_COLONY_DESC
+Can establish colonies on faraway worlds.
+
+SD_ROBOTIC_CRYOCOL
+Robotic CryoColony
+
+SD_ROBOTIC_CRYOCOL_DESC
+Can establish advanced colonies on faraway worlds.
+
+SD_ROBO_FLUX_SCOUT
+Flux Scout
+
+SD_ROBO_FLUX_SCOUT_DESC
+Fast scouting hull
+
+SD_ROBO_FLUX_TROOPS
+Flux Troops
+
+SD_ROBO_FLUX_TROOPS_DESC
+Fast troop carrier
+
+SD_ROBO_FLUX_TROOPS_HVY
+Flux Heavy Troops
+
+SD_ROBO_FLUX_TROOPS_HVY_DESC
+Fast advanced troop carrier
+
+SD_ROBOTIC1
+Robocruiser (M1)
+
+SD_ROBOTIC1_DESC
+Robotic mass-driver fighter. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORBITAL_DRYDOCK]].
+
+SD_ROBOTIC2
+Robocruiser (M2)
+
+SD_ROBOTIC2_DESC
+Robotic fighter heavy armor. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORBITAL_DRYDOCK]].
+
+SD_ROBOTIC3
+Robocruiser (L)
+
+SD_ROBOTIC3_DESC
+Improved robotic fighter with lasers. Can only be built at a colony with a [[buildingtype BLD_SHIPYARD_BASE]] and an [[buildingtype BLD_SHIPYARD_ORBITAL_DRYDOCK]].
+
+SD_NANOROBOTIC1
+Nanobot Battlecruiser
+
+SD_NANOROBOTIC1_DESC
+Advanced heavy cruiser capable of self repair
+
+SD_GRAVITATING1
+Gravitic Battleship (P)
+
 SD_GRAVITATING1_DESC
 Massiccia nave da guerra armata e protetta con gli ultimi ritrovati tecnologici. Fissato il prezzo di conseguenza.
 
