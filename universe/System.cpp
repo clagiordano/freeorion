@@ -192,7 +192,7 @@ UniverseObjectType System::ObjectType() const
 std::string System::Dump() const {
     std::stringstream os;
     os << UniverseObject::Dump();
-    os << " star type: " << UserString(EnumToString(m_star))
+    os << " star type: " << m_star
        << "  last combat on turn: " << m_last_turn_battle_here
        << "  total orbits: " << m_orbits.size();
 
@@ -318,6 +318,23 @@ bool System::HasStarlaneTo(int id) const {
 bool System::HasWormholeTo(int id) const {
     std::map<int, bool>::const_iterator it = m_starlanes_wormholes.find(id);
     return (it == m_starlanes_wormholes.end() ? false : it->second == true);
+}
+
+int  System::Owner() const {
+    // Check if all of the owners are the same empire.
+    int first_owner_found(ALL_EMPIRES);
+    for (std::set<int>::const_iterator it = m_planets.begin(); it != m_planets.end(); ++it) {
+        if (TemporaryPtr<const Planet> planet = GetPlanet(*it)) {
+            const int owner(planet->Owner());
+            if (owner == ALL_EMPIRES)
+                continue;
+            if (first_owner_found == ALL_EMPIRES)
+                first_owner_found = owner;
+            if (first_owner_found != owner)
+                return ALL_EMPIRES;
+        }
+    }
+    return first_owner_found;
 }
 
 const std::set<int>& System::ContainedObjectIDs() const

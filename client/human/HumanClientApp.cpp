@@ -1,5 +1,3 @@
-#include <GL/glew.h>
-
 #ifdef HAVE_CONFIG_H
 # include <config.h>
 #endif
@@ -303,6 +301,9 @@ HumanClientApp::HumanClientApp(int width, int height, bool calculate_fps, const 
     // Placed after mouse initialization.
     if (inform_user_sound_failed)
         ClientUI::MessageBox(UserString("ERROR_SOUND_INITIALIZATION_FAILED"), false);
+
+    // Register LinkText tags with GG::Font
+    RegisterLinkTags();
 
     m_fsm->initiate();
 }
@@ -718,7 +719,7 @@ void HumanClientApp::RequestSavePreviews(const std::string& directory, PreviewIn
         ExtractMessageData(response, previews);
         DebugLogger() << "HumanClientApp::RequestSavePreviews Got " << previews.previews.size() << " previews.";
     }else{
-        ErrorLogger() << "HumanClientApp::RequestSavePreviews: Wrong response type from server: " << EnumToString(response.Type());
+        ErrorLogger() << "HumanClientApp::RequestSavePreviews: Wrong response type from server: " << response.Type();
     }
 }
 

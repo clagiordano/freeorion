@@ -17,6 +17,7 @@
 #include "../universe/ShipDesign.h"
 
 #include <GG/DrawUtil.h>
+#include <GG/Layout.h>
 #include <GG/StaticGraphic.h>
 
 #include <boost/cast.hpp>
@@ -69,19 +70,12 @@ namespace {
         QuantRow(int quantity, int designID, GG::X nwidth, GG::Y h,
                  bool inProgress, bool amBlockType) :
             GG::ListBox::Row(),
-            width(0),
             m_quant(quantity)
         {
             QuantLabel* newLabel = new QuantLabel(m_quant, designID, nwidth, h, inProgress, amBlockType);
-            width = newLabel->Width();
-            height = newLabel->Height();
             push_back(newLabel);
-            Resize(GG::Pt(nwidth, height-GG::Y0));//might subtract more; assessing aesthetics
-            //OffsetMove(GG::Pt(GG::X0, GG::Y(-2))); // didn't appear to have an effect
+            Resize(GG::Pt(nwidth, newLabel->Height()-GG::Y0));//might subtract more; assessing aesthetics
         }
-
-        GG::X width;
-        GG::Y height;
 
         int Quant() const { return m_quant; }
 
@@ -195,20 +189,25 @@ namespace {
     //////////////////////////////////////////////////
     class QueueProductionItemPanel : public GG::Control {
     public:
-        QueueProductionItemPanel(GG::X w, const ProductionQueue::Element& build, double turn_cost, double total_cost,
+        QueueProductionItemPanel(GG::X x, GG::Y y, GG::X w,
+                                 const ProductionQueue::Element& build, double turn_cost, double total_cost,
                                  int turns, int number, int turns_completed, double partially_complete_turn);
 
+        virtual void    PreRender();
         virtual void    Render();
         void            UpdateQueue();
         void            ItemQuantityChanged(int quant, int blocksize);
         void            ItemBlocksizeChanged(int quant, int blocksize);
         virtual void    SizeMove(const GG::Pt& ul, const GG::Pt& lr);
 
+        static GG::Y    DefaultHeight();
+
         mutable boost::signals2::signal<void(int,int)>    PanelUpdateQuantSignal;
 
     private:
         void            Draw(GG::Clr clr, bool fill);
         void            DoLayout();
+        void            Init();
 
         const ProductionQueue::Element  elem;
         GG::Label*                      m_name_text;
@@ -221,9 +220,12 @@ namespace {
         QuantitySelector*               m_block_size_selector;
         bool                            m_in_progress;
         int                             m_total_turns;
+        double                          m_turn_spending;
+        double                          m_total_cost;
         int                             m_turns_completed;
         double                          m_partially_complete_turn;
         bool                            m_order_issuing_enabled;
+        bool                            m_initialized;
     };
 
     /////////////////////////////
@@ -316,14 +318,20 @@ namespace {
     //////////////////////////////////////////////////
     // QueueRow
     //////////////////////////////////////////////////
+    const int MARGIN = 2;
+    const GG::X X_MARGIN = GG::X(MARGIN);
+    const GG::Y Y_MARGIN = GG::Y(MARGIN);
+
     struct QueueRow : GG::ListBox::Row {
         QueueRow(GG::X w, const ProductionQueue::Element& elem, int queue_index_) :
-            GG::ListBox::Row(w, GG::Y1, BuildDesignatorWnd::PRODUCTION_ITEM_DROP_TYPE),
+            GG::ListBox::Row(w, QueueProductionItemPanel::DefaultHeight(),
+                             BuildDesignatorWnd::PRODUCTION_ITEM_DROP_TYPE),
+            panel(0),
             queue_index(queue_index_),
             elem(elem)
-        {
-            //std::cout << "QueueRow(" << w << ", ...)" << std::endl;
+        { RequirePreRender(); }
 
+        void Init() {
             const Empire* empire = GetEmpire(HumanClientApp::GetApp()->EmpireID());
             float total_cost(1.0f);
             int minimum_turns(1);
@@ -335,11 +343,15 @@ namespace {
             if (progress == -1.0f)
                 progress = 0.0f;
 
-            panel = new QueueProductionItemPanel(w, elem, elem.allocated_pp, total_cost, minimum_turns, elem.remaining,
+            panel = new QueueProductionItemPanel(GG::X0, GG::Y0, ClientWidth() - MARGIN - MARGIN,
+                                                 elem, elem.allocated_pp, total_cost, minimum_turns, elem.remaining,
                                                  static_cast<int>(progress / std::max(1e-6f, per_turn_cost)),
                                                  std::fmod(progress, per_turn_cost) / std::max(1e-6f, per_turn_cost));
-            Resize(panel->Size());
             push_back(panel);
+
+            // Since this is only called during PreRender force panel to PreRender()
+            GG::GUI::PreRenderWindow(panel);
+            GetLayout()->PreRender();
 
             SetDragDropDataType(BuildDesignatorWnd::PRODUCTION_ITEM_DROP_TYPE);
 
@@ -347,6 +359,14 @@ namespace {
             SetBrowseInfoWnd(ProductionItemBrowseWnd(elem));
 
             GG::Connect(panel->PanelUpdateQuantSignal,  &QueueRow::RowQuantChanged, this);
+
+        }
+
+        virtual void PreRender() {
+            GG::ListBox::Row::PreRender();
+
+            if (!panel)
+                Init();
         }
 
         virtual void Disable(bool b) {
@@ -358,15 +378,6 @@ namespace {
                 GG::Control* ctrl = *it;
                 if (ctrl)
                     ctrl->Disable(this->Disabled());
-            }
-        }
-
-        virtual void SizeMove(const GG::Pt& ul, const GG::Pt& lr) {
-            const GG::Pt old_size = Size();
-            GG::ListBox::Row::SizeMove(ul, lr);
-            if (!empty() && old_size != Size() && panel) {
-                //std::cout << "QueueRow resized to: " << Size() << std::endl;
-                panel->Resize(Size());
             }
         }
 
@@ -385,12 +396,10 @@ namespace {
     //////////////////////////////////////////////////
     // QueueProductionItemPanel implementation
     //////////////////////////////////////////////////
-    const int MARGIN = 2;
-
-    QueueProductionItemPanel::QueueProductionItemPanel(GG::X w, const ProductionQueue::Element& build,
+    QueueProductionItemPanel::QueueProductionItemPanel(GG::X x, GG::Y y, GG::X w, const ProductionQueue::Element& build,
                                                        double turn_spending, double total_cost, int turns, int number,
                                                        int turns_completed, double partially_complete_turn) :
-        GG::Control(GG::X0, GG::Y0, w, GG::Y(10), GG::NO_WND_FLAGS),
+        GG::Control(x, y, w, DefaultHeight(), GG::NO_WND_FLAGS),
         elem(build),
         m_name_text(0),
         m_location_text(0),
@@ -402,9 +411,25 @@ namespace {
         m_block_size_selector(0),
         m_in_progress(build.allocated_pp || build.turns_left_to_next_item == 1),
         m_total_turns(turns),
+        m_turn_spending(turn_spending),
+        m_total_cost(total_cost),
         m_turns_completed(turns_completed),
-        m_partially_complete_turn(partially_complete_turn)
+        m_partially_complete_turn(partially_complete_turn),
+        m_initialized(false)
     {
+        SetChildClippingMode(ClipToClient);
+        RequirePreRender();
+    }
+
+    GG::Y QueueProductionItemPanel::DefaultHeight() {
+        const int FONT_PTS = ClientUI::Pts();
+        const GG::Y HEIGHT = Y_MARGIN + FONT_PTS + Y_MARGIN + FONT_PTS + Y_MARGIN + FONT_PTS + Y_MARGIN + 6;
+        return HEIGHT;
+    }
+
+    void QueueProductionItemPanel::Init() {
+        m_initialized = true;
+
         GG::Clr clr = m_in_progress
             ? GG::LightColor(ClientUI::ResearchableTechTextAndBorderColor())
             : ClientUI::ResearchableTechTextAndBorderColor();
@@ -412,18 +437,16 @@ namespace {
         // get graphic and player-visible name text for item
         boost::shared_ptr<GG::Texture> graphic;
         std::string name_text;
-        if (build.paused) {
-            name_text = UserString("PAUSED");
-        } else if (build.item.build_type == BT_BUILDING) {
-            graphic = ClientUI::BuildingIcon(build.item.name);
-            name_text = UserString(build.item.name);
-        } else if (build.item.build_type == BT_SHIP) {
-            graphic = ClientUI::ShipDesignIcon(build.item.design_id);
-            const ShipDesign* design = GetShipDesign(build.item.design_id);
+        if (elem.item.build_type == BT_BUILDING) {
+            graphic = ClientUI::BuildingIcon(elem.item.name);
+            name_text = UserString(elem.item.name);
+        } else if (elem.item.build_type == BT_SHIP) {
+            graphic = ClientUI::ShipDesignIcon(elem.item.design_id);
+            const ShipDesign* design = GetShipDesign(elem.item.design_id);
             if (design)
                 name_text = design->Name();
             else
-                ErrorLogger() << "QueueProductionItemPanel unable to get design with id: " << build.item.design_id;
+                ErrorLogger() << "QueueProductionItemPanel unable to get design with id: " << elem.item.design_id;
         } else {
             graphic = ClientUI::GetTexture(""); // get "missing texture" texture by supply intentionally bad path
             name_text = UserString("FW_UNKNOWN_DESIGN_NAME");
@@ -432,15 +455,13 @@ namespace {
         // get location indicator text
         std::string location_text;
         bool system_selected = false;
-        if (TemporaryPtr<const UniverseObject> location = GetUniverseObject(build.location)) {
+        if (TemporaryPtr<const UniverseObject> location = GetUniverseObject(elem.location)) {
             system_selected = (location->SystemID() != -1 && location ->SystemID() == SidePanel::SystemID());
             if (GetOptionsDB().Get<bool>("UI.show-production-location-on-queue"))
                 location_text = boost::io::str(FlexibleFormat(UserString("PRODUCTION_QUEUE_ITEM_LOCATION")) % location->Name()) + " ";
         }
 
-
         const int FONT_PTS = ClientUI::Pts();
-
 
         m_icon = 0;
         if (graphic)
@@ -468,22 +489,23 @@ namespace {
             m_location_text->SetTextColor(location_clr);
         }
 
-        m_progress_bar = new MultiTurnProgressBar(turns, turns_completed + partially_complete_turn, total_cost, turn_spending,
+        m_progress_bar = new MultiTurnProgressBar(m_total_turns, m_turns_completed + m_partially_complete_turn,
+                                                  m_total_cost, m_turn_spending,
                                                   GG::LightColor(ClientUI::TechWndProgressBarBackgroundColor()),
                                                   ClientUI::TechWndProgressBarColor(),
                                                   m_in_progress
                                                     ? ClientUI::ResearchableTechFillColor()
                                                     : GG::LightColor(ClientUI::ResearchableTechFillColor()));
 
-        double max_spending_per_turn = total_cost / m_total_turns;
+        double max_spending_per_turn = m_total_cost / m_total_turns;
         std::string turn_spending_text = boost::io::str(FlexibleFormat(UserString("PRODUCTION_TURN_COST_STR"))
-            % DoubleToString(turn_spending, 3, false)
+            % DoubleToString(m_turn_spending, 3, false)
             % DoubleToString(max_spending_per_turn, 3, false));
         m_PPs_and_turns_text = new CUILabel(turn_spending_text, GG::FORMAT_LEFT);
         m_PPs_and_turns_text->SetTextColor(clr);
 
 
-        int turns_left = build.turns_left_to_next_item;
+        int turns_left = elem.turns_left_to_next_item;
         std::string turns_left_text = turns_left < 0
             ? UserString("PRODUCTION_TURNS_LEFT_NEVER")
             : str(FlexibleFormat(UserString("PRODUCTION_TURNS_LEFT_STR")) % turns_left);
@@ -507,8 +529,17 @@ namespace {
         if (m_block_size_selector)
             GG::Connect(m_block_size_selector->QuantChangedSignal,  &QueueProductionItemPanel::ItemBlocksizeChanged, this);
 
-        const GG::Y HEIGHT = GG::Y(MARGIN) + FONT_PTS + MARGIN + FONT_PTS + MARGIN + FONT_PTS + MARGIN + 6;
-        Resize(GG::Pt(w, HEIGHT));
+        // Since this is only called during PreRender force quantity indicators to PreRender()
+        GG::GUI::PreRenderWindow(m_quantity_selector);
+        GG::GUI::PreRenderWindow(m_block_size_selector);
+    }
+
+    void QueueProductionItemPanel::PreRender() {
+        if (!m_initialized)
+            Init();
+
+        GG::Wnd::PreRender();
+        DoLayout();
     }
 
     void QueueProductionItemPanel::DoLayout() {
@@ -534,14 +565,13 @@ namespace {
         }
         if (m_block_size_selector) {
             m_block_size_selector->MoveTo(GG::Pt(left, GG::Y(MARGIN)));
-            if (m_quantity_selector) {
-                left += m_quantity_selector->Width();
-            }
+            left += m_block_size_selector->Width();
         }
 
-        const GG::X NAME_WIDTH = Width() - left - MARGIN;
+        const GG::X NAME_WIDTH = Width() - left - MARGIN - 3;
         m_name_text->MoveTo(GG::Pt(left, top));
         m_name_text->Resize(GG::Pt(NAME_WIDTH, GG::Y(FONT_PTS + 2*MARGIN)));
+        m_name_text->SetChildClippingMode(ClipToClient);
 
         m_location_text->MoveTo(GG::Pt(left, top));
         m_location_text->Resize(GG::Pt(NAME_WIDTH, GG::Y(FONT_PTS + 2*MARGIN)));
@@ -591,14 +621,15 @@ namespace {
     void QueueProductionItemPanel::Draw(GG::Clr clr, bool fill) {
         const int CORNER_RADIUS = 7;
         glColor(clr);
-        PartlyRoundedRect(UpperLeft(), LowerRight(), CORNER_RADIUS, true, false, true, false, fill);
+        GG::Pt LINE_WIDTH(GG::X(3), GG::Y0);
+        PartlyRoundedRect(UpperLeft(), LowerRight() - LINE_WIDTH, CORNER_RADIUS, true, false, true, false, fill);
     }
 
     void QueueProductionItemPanel::SizeMove(const GG::Pt& ul, const GG::Pt& lr) {
-            const GG::Pt old_size = Size();
-            GG::Control::SizeMove(ul, lr);
-            if (Size() != old_size)
-                DoLayout();
+        const GG::Pt old_size = Size();
+        GG::Control::SizeMove(ul, lr);
+        if (Size() != old_size)
+            RequirePreRender();
     }
 
     class ProdQueueListBox : public QueueListBox {
@@ -954,9 +985,14 @@ void ProductionWnd::UpdateQueue() {
     ScopedTimer timer("ProductionWnd::UpdateQueue");
 
     m_queue_wnd->SetEmpire(m_empire_shown_id);
-
     QueueListBox* queue_lb = m_queue_wnd->GetQueueListBox();
-    std::size_t first_visible_queue_row = std::distance(queue_lb->begin(), queue_lb->FirstRowShown());
+
+    // Capture the list scroll state
+    // Try to preserve the same queue context with completely new queue items
+    std::size_t initial_offset_from_begin = std::distance(queue_lb->begin(), queue_lb->FirstRowShown());
+    std::size_t initial_offset_to_end = std::distance(queue_lb->FirstRowShown(), queue_lb->end());
+    bool initial_last_visible_row_is_end(queue_lb->LastVisibleRow() == queue_lb->end());
+
     queue_lb->Clear();
 
     const Empire* empire = GetEmpire(m_empire_shown_id);
@@ -972,10 +1008,21 @@ void ProductionWnd::UpdateQueue() {
         queue_lb->Insert(row);
     }
 
-    if (!queue_lb->Empty())
-        queue_lb->BringRowIntoView(--queue_lb->end());
-    if (first_visible_queue_row < queue_lb->NumRows())
-        queue_lb->BringRowIntoView(boost::next(queue_lb->begin(), first_visible_queue_row));
+    // Restore the list scroll state
+    // If we were at the top stay at the top
+    if (initial_offset_from_begin == 0)
+        queue_lb->SetFirstRowShown(queue_lb->begin());
+
+    // If we were not at the bottom then keep the same first row position
+    else if (!initial_last_visible_row_is_end && initial_offset_from_begin < queue_lb->NumRows())
+        queue_lb->SetFirstRowShown(boost::next(queue_lb->begin(), initial_offset_from_begin));
+
+    // otherwise keep the same relative position from the bottom to
+    // preserve the end of list dead space
+    else if (initial_offset_to_end < queue_lb->NumRows())
+        queue_lb->SetFirstRowShown(boost::next(queue_lb->begin(), queue_lb->NumRows() -  initial_offset_to_end));
+    else
+        queue_lb->SetFirstRowShown(queue_lb->begin());
 }
 
 void ProductionWnd::UpdateInfoPanel() {

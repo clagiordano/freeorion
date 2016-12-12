@@ -4,7 +4,6 @@ if(POLICY CMP0044)
     cmake_policy(SET CMP0044 OLD)
 endif()
 
-enable_testing()
 include(CMakeDependentOption)
 include(GNUInstallDirs)
 
@@ -14,6 +13,9 @@ project(GiGi)
 # Configuration                        #
 ########################################
 set(GIGI_VERSION 0.8.0)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_HOME_DIRECTORY}/cmake)
 
@@ -23,17 +25,7 @@ option(BUILD_SHARED_LIBS "Enables building of shared libraries; OFF implies stat
 
 cmake_dependent_option(USE_STATIC_LIBS "Favour static linking of depencendies." OFF BUILD_SHARED_LIBS OFF)
 
-if (BUILD_DEBUG)
-    set(BUILD_RELEASE OFF)
-else ()
-    set(BUILD_RELEASE ON)
-endif ()
-
-if (DEFINED BUILD_STATIC OR DEFINED BUILD_SHARED)
-    message(FATAL "BUILD_STATIC and BUILD_SHARED are removed in favour of BUILD_SHARED_LIBS.")
-    return()
-endif ()
-
+include(UseCodeCoverage)
 include(Util)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -46,6 +38,9 @@ option(BUILD_SDL_DRIVER
        ON)
 option(GiGi_BUILD_DOC
        "Builds HTML documentation (requires Doxygen)."
+       OFF)
+option(GiGi_BUILD_TEST
+       "Builds test (requires Boost.Test)."
        OFF)
 option(BUILD_DEVEL_PACKAGE
        "Install development files."
@@ -65,7 +60,10 @@ if (MSVC)
     set (CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /NODEFAULTLIB:LIBCMT")
 endif ()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
 
 
 ########################################
@@ -74,29 +72,28 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 set(Boost_USE_STATIC_LIBS ${USE_STATIC_LIBS})
 find_package(Boost ${MINIMUM_BOOST_VERSION} COMPONENTS chrono date_time filesystem regex signals system thread log REQUIRED)
 
-include_directories(${Boost_INCLUDE_DIRS})
-
-set(int_have_jpeg 0)
 set(int_have_png 0)
 set(int_have_tiff 0)
-find_package(JPEG)
 find_package(PNG)
 find_package(TIFF)
 
-if (JPEG_FOUND)
-    include_directories(${JPEG_INCLUDE_DIR})
-    set(int_have_jpeg 1)
-endif ()
 if (PNG_FOUND)
-    include_directories(${PNG_INCLUDE_DIR})
+    include_directories(
+        SYSTEM
+        ${PNG_INCLUDE_DIR}
+    )
     set(int_have_png 1)
 endif ()
 if (TIFF_FOUND)
-    include_directories(${TIFF_INCLUDE_DIR})
+    include_directories(
+        SYSTEM
+        ${TIFF_INCLUDE_DIR}
+    )
     set(int_have_tiff 1)
 endif ()
 
 find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
 find_package(Freetype REQUIRED)
 
 if (NOT OPENGL_GLU_FOUND)
@@ -104,7 +101,10 @@ if (NOT OPENGL_GLU_FOUND)
 endif ()
 
 include_directories(
+    SYSTEM
+    ${Boost_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
+    ${GLEW_INCLUDE_DIR}
     ${FREETYPE_INCLUDE_DIRS}
 )
 
@@ -134,46 +134,14 @@ endif ()
 # Recurse Into Sources                 #
 ########################################
 add_subdirectory(src)
-
-########################################
-# Documentation                        #
-########################################
-if (GiGi_BUILD_DOC)
-    find_package(Doxygen REQUIRED)
-endif ()
-
-if (DOXYGEN_FOUND)
-    set(GG_DOC_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/doc")
-    set(GG_DOC_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/doc")
-    set(GG_DOC_STAMP_DIR "${GG_DOC_OUTPUT_DIR}/GG")
-    configure_file(
-        ${GG_DOC_SOURCE_DIR}/Doxyfile.in
-        ${GG_DOC_OUTPUT_DIR}/Doxyfile
-        @ONLY
-        IMMEDIATE
-    )
-
-    if(NOT TARGET doc)
-        add_custom_target(doc)
-    endif()
-
-    add_custom_command (
-        OUTPUT ${GG_DOC_STAMP_DIR}/index.html
-        COMMAND ${DOXYGEN_EXECUTABLE} ${GG_DOC_OUTPUT_DIR}/Doxyfile
-        MAIN_DEPENDENCY ${GG_DOC_OUTPUT_DIR}/Doxyfile ${GG_DOC_SOURCE_DIR}/Doxyfile.in
-        DEPENDS ${GG_DOC_SOURCE_DIR}/GGDoc.txt
-        COMMENT "Generating GiGi API documentation with Doxygen" VERBATIM
-    )
-    add_custom_target (GiGi-apidoc DEPENDS ${GG_DOC_STAMP_DIR}/index.html)
-    add_dependencies(doc GiGi-apidoc)
-
-    if (BUILD_DEVEL_PACKAGE)
-        install(
-            DIRECTORY ${GG_DOC_STAMP_DIR}
-            DESTINATION ${CMAKE_INSTALL_DOCDIR}
-        )
-    endif ()
-endif ()
+if(GiGi_BUILD_DOC)
+    add_subdirectory(doc)
+endif()
+if(GiGi_BUILD_TEST)
+    enable_testing()
+    enable_coverage()
+    add_subdirectory(test)
+endif()
 
 
 ########################################

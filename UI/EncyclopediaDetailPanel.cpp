@@ -74,23 +74,89 @@ namespace {
 }
 
 namespace {
+    /** Retreive a value label and general string representation for @a meter_type */
+    std::pair<std::string, std::string> MeterValueLabelAndString(const MeterType& meter_type) {
+        std::pair<std::string, std::string> retval;
+
+        retval.second = boost::lexical_cast<std::string>(meter_type);
+
+        retval.first = retval.second + "_VALUE_LABEL";
+        if (UserStringExists(retval.first)) {
+            retval.first = UserString(retval.first);
+        } else {
+            DebugLogger() << "No pedia entry found for value of Meter Type: "
+                          << retval.second << "(" << meter_type << ")";
+            retval.first = UserString(retval.second);
+        }
+
+        return retval;
+    }
+
+    void MeterTypeDirEntry(const MeterType& meter_type,
+                           std::multimap<std::string,
+                                         std::pair<std::string,
+                                                   std::string> >& list)
+    {
+        std::pair<std::string, std::string> meter_name = MeterValueLabelAndString(meter_type);
+
+        if (meter_name.first.empty() || meter_name.second.empty())
+            return;
+
+        std::string link_string = LinkTaggedPresetText(VarText::METER_TYPE_TAG,
+                                                       meter_name.second,
+                                                       meter_name.first) + "\n";
+
+        list.insert(std::make_pair(meter_name.first,
+                                   std::make_pair(link_string,
+                                                  "ENC_METER_TYPE")));
+    }
+
     const std::vector<std::string>& GetSearchTextDirNames() {
         static std::vector<std::string> dir_names;
         if (dir_names.empty()) {
             dir_names.push_back("ENC_INDEX");
-            dir_names.push_back("ENC_SHIP_PART");       dir_names.push_back("ENC_SHIP_HULL");
-            dir_names.push_back("ENC_TECH");            dir_names.push_back("ENC_BUILDING_TYPE");
-            dir_names.push_back("ENC_SPECIAL");         dir_names.push_back("ENC_SPECIES");
-            dir_names.push_back("ENC_FIELD_TYPE");      dir_names.push_back("ENC_EMPIRE");
-            dir_names.push_back("ENC_SHIP_DESIGN");     dir_names.push_back("ENC_SHIP");
-            dir_names.push_back("ENC_MONSTER");         dir_names.push_back("ENC_MONSTER_TYPE");
-            dir_names.push_back("ENC_FLEET");           dir_names.push_back("ENC_PLANET");
-            dir_names.push_back("ENC_BUILDING");        dir_names.push_back("ENC_SYSTEM");
-            dir_names.push_back("ENC_FIELD");           dir_names.push_back("ENC_GRAPH");
+            dir_names.push_back("ENC_SHIP_PART");
+            dir_names.push_back("ENC_SHIP_HULL");
+            dir_names.push_back("ENC_TECH");
+            dir_names.push_back("ENC_BUILDING_TYPE");
+            dir_names.push_back("ENC_SPECIAL");
+            dir_names.push_back("ENC_SPECIES");
+            dir_names.push_back("ENC_FIELD_TYPE");
+            dir_names.push_back("ENC_METER_TYPE");
+            dir_names.push_back("ENC_EMPIRE");
+            dir_names.push_back("ENC_SHIP_DESIGN");
+            dir_names.push_back("ENC_SHIP");
+            dir_names.push_back("ENC_MONSTER");
+            dir_names.push_back("ENC_MONSTER_TYPE");
+            dir_names.push_back("ENC_FLEET");
+            dir_names.push_back("ENC_PLANET");
+            dir_names.push_back("ENC_BUILDING");
+            dir_names.push_back("ENC_SYSTEM");
+            dir_names.push_back("ENC_FIELD");
+            dir_names.push_back("ENC_GRAPH");
             dir_names.push_back("ENC_GALAXY_SETUP");
             //  dir_names.push_back("ENC_HOMEWORLDS");  // omitted due to weird formatting of article titles
         }
         return dir_names;
+    }
+
+    /** Find Encyclopedia article with given name
+     * @param[in] name name entry of the article
+     */
+    const EncyclopediaArticle& GetPediaArticle(const std::string& name) {
+        const std::map<std::string, std::vector<EncyclopediaArticle> >& articles = GetEncyclopedia().articles;
+        for (std::map<std::string, std::vector<EncyclopediaArticle> >::const_iterator category_it = articles.begin();
+             category_it != articles.end(); ++category_it)
+        {
+            for (std::vector<EncyclopediaArticle>::const_iterator article_it = category_it->second.begin();
+                 article_it != category_it->second.end(); ++article_it)
+            {
+                if (article_it->name == name) {
+                    return *article_it;
+                }
+            }
+        }
+        return GetEncyclopedia().empty_article;
     }
 
     /** Returns map from (Human-readable and thus sorted article category) to
@@ -132,6 +198,9 @@ namespace {
             sorted_entries_list.insert(std::make_pair(UserString("ENC_FIELD_TYPE"),
                 std::make_pair(LinkTaggedText(TextLinker::ENCYCLOPEDIA_TAG, "ENC_FIELD_TYPE") + "\n",
                                "ENC_FIELD_TYPE")));
+            sorted_entries_list.insert(std::make_pair(UserString("ENC_METER_TYPE"),
+                std::make_pair(LinkTaggedText(TextLinker::ENCYCLOPEDIA_TAG, "ENC_METER_TYPE") + "\n",
+                               "ENC_METER_TYPE")));
             sorted_entries_list.insert(std::make_pair(UserString("ENC_EMPIRE"),
                 std::make_pair(LinkTaggedText(TextLinker::ENCYCLOPEDIA_TAG, "ENC_EMPIRE") + "\n",
                                "ENC_EMPIRE")));
@@ -173,6 +242,12 @@ namespace {
                  it = encyclopedia.articles.begin();
                  it != encyclopedia.articles.end(); ++it)
             {
+                // Do not add sub-categories
+                const EncyclopediaArticle& article = GetPediaArticle(it->first);
+                // No article found or specifically a top-level category
+                if (!article.category.empty() && article.category != "ENC_INDEX")
+                    continue;
+
                 sorted_entries_list.insert(std::make_pair(UserString(it->first),
                     std::make_pair(LinkTaggedText(TextLinker::ENCYCLOPEDIA_TAG, it->first) + "\n",
                                    it->first)));
@@ -328,6 +403,14 @@ namespace {
                                    it->first)));
             }
 
+        } else if (dir_name == "ENC_METER_TYPE") {
+            for (MeterType meter_type = METER_POPULATION;
+                 meter_type != NUM_METER_TYPES;
+                 meter_type = static_cast<MeterType>(static_cast<int>(meter_type) + 1))
+            {
+                if (meter_type > INVALID_METER_TYPE && meter_type < NUM_METER_TYPES)
+                    MeterTypeDirEntry(meter_type, sorted_entries_list);
+            }
         } else if (dir_name == "ENC_EMPIRE") {
             const EmpireManager& empire_manager = Empires();
             for (EmpireManager::const_iterator it = empire_manager.begin();
@@ -477,25 +560,6 @@ namespace {
 
         return retval;
     }
-
-    /** Find Encyclopedia article with given name
-     * @param[in] name name entry of the article
-     */
-    EncyclopediaArticle GetPediaArticle(const std::string& name) {
-        const std::map<std::string, std::vector<EncyclopediaArticle> >& articles = GetEncyclopedia().articles;
-        for (std::map<std::string, std::vector<EncyclopediaArticle> >::const_iterator category_it = articles.begin();
-             category_it != articles.end(); ++category_it)
-        {
-            for (std::vector<EncyclopediaArticle>::const_iterator article_it = category_it->second.begin();
-                 article_it != category_it->second.end(); ++article_it)
-            {
-                if (article_it->name == name) {
-                    return *article_it;
-                }
-            }
-        }
-        return EncyclopediaArticle("", "", "", "", "");
-    }
 }
 
 namespace {
@@ -535,7 +599,8 @@ EncyclopediaDetailPanel::EncyclopediaDetailPanel(GG::Flags<GG::WndFlag> flags, c
     m_description_panel(0),
     m_icon(0),
     m_search_edit(0),
-    m_graph(0)
+    m_graph(0),
+    m_needs_refresh(false)
 {
     const int PTS = ClientUI::Pts();
     const int NAME_PTS = PTS*3/2;
@@ -616,11 +681,6 @@ EncyclopediaDetailPanel::EncyclopediaDetailPanel(GG::Flags<GG::WndFlag> flags, c
 EncyclopediaDetailPanel::~EncyclopediaDetailPanel() {
     if (m_graph && m_graph->Parent() != this)
     delete m_graph;
-}
-
-void EncyclopediaDetailPanel::PreRender() {
-    GG::Wnd::PreRender();
-    DoLayout();
 }
 
 void EncyclopediaDetailPanel::DoLayout() {
@@ -841,6 +901,8 @@ void EncyclopediaDetailPanel::HandleLinkClick(const std::string& link_type, cons
             this->SetBuildingType(data);
         } else if (link_type == VarText::FIELD_TYPE_TAG) {
             this->SetFieldType(data);
+        } else if (link_type == VarText::METER_TYPE_TAG) {
+            this->SetMeterType(data);
         } else if (link_type == VarText::SPECIAL_TAG) {
             this->SetSpecial(data);
         } else if (link_type == VarText::SHIP_HULL_TAG) {
@@ -1117,7 +1179,6 @@ namespace {
                                             std::string& specific_type, std::string& detailed_description,
                                             GG::Clr& color)
     {
-        detailed_description = PediaDirText(item_name);
         name = UserString(item_name);
 
         // special case for galaxy setup data: display info
@@ -1139,7 +1200,7 @@ namespace {
             return;
         }
 
-        // search for article in custom pedia entries. 
+        // search for article in custom pedia entries.
         const Encyclopedia& encyclopedia = GetEncyclopedia();
         for (std::map<std::string, std::vector<EncyclopediaArticle> >::const_iterator
              category_it = encyclopedia.articles.begin();
@@ -1153,13 +1214,30 @@ namespace {
                     continue;
 
                 detailed_description = UserString(article_it->description);
-                general_type = UserString(article_it->category);
-                specific_type = UserString(article_it->short_description);
+
+                const std::string& article_cat = article_it->category;
+                if (article_cat != "ENC_INDEX" && !article_cat.empty())
+                    general_type = UserString(article_cat);
+
+                const std::string& article_brief = article_it->short_description;
+                if (!article_brief.empty())
+                    specific_type = UserString(article_brief);
+
                 texture = ClientUI::GetTexture(ClientUI::ArtDir() / article_it->icon, true);
 
-                return;
+                break;
             }
         }
+
+        // add listing of articles in this category
+        std::string dir_text = PediaDirText(item_name);
+        if (dir_text.empty())
+            return;
+
+        if (!detailed_description.empty())
+            detailed_description += "\n\n";
+
+        detailed_description += dir_text;
     }
 
     void RefreshDetailPanelShipPartTag(     const std::string& item_type, const std::string& item_name,
@@ -2010,6 +2088,32 @@ namespace {
         }
     }
 
+
+    void RefreshDetailPanelMeterTypeTag(const std::string& item_type, const std::string& item_name,
+                                        std::string& name, boost::shared_ptr<GG::Texture>& texture,
+                                        boost::shared_ptr<GG::Texture>& other_texture, int& turns,
+                                        float& cost, std::string& cost_units, std::string& general_type,
+                                        std::string& specific_type, std::string& detailed_description,
+                                        GG::Clr& color)
+    {
+        MeterType meter_type = INVALID_METER_TYPE;
+        std::istringstream item_ss(item_name);
+        item_ss >> meter_type;
+
+        texture = ClientUI::MeterIcon(meter_type);
+        general_type = UserString("ENC_METER_TYPE");
+
+        std::pair<std::string, std::string> meter_name = MeterValueLabelAndString(meter_type);
+
+        name = meter_name.first;
+
+        if (UserStringExists(meter_name.second + "_VALUE_DESC"))
+            detailed_description += UserString(meter_name.second + "_VALUE_DESC");
+        else
+            detailed_description += meter_name.first;
+
+    }
+
     std::string GetDetailedDescriptionBase(const ShipDesign* design) {
         std::string hull_link;
         if (!design->Hull().empty())
@@ -2603,6 +2707,11 @@ namespace {
             RefreshDetailPanelFieldTypeTag(     item_type, item_name,
                                                 name, texture, other_texture, turns, cost, cost_units,
                                                 general_type, specific_type, detailed_description, color);
+        } else if (item_type == "ENC_METER_TYPE") {
+            RefreshDetailPanelMeterTypeTag(     item_type, item_name,
+                                                name, texture, other_texture, turns, cost, cost_units,
+                                                general_type, specific_type, detailed_description, color);
+
         } else if (item_type == "ENC_SHIP_DESIGN") {
             RefreshDetailPanelShipDesignTag(    item_type, item_name,
                                                 name, texture, other_texture, turns, cost, cost_units,
@@ -2635,6 +2744,22 @@ namespace {
 }
 
 void EncyclopediaDetailPanel::Refresh() {
+    m_needs_refresh = true;
+    RequirePreRender();
+}
+
+void EncyclopediaDetailPanel::PreRender() {
+    CUIWnd::PreRender();
+
+    if (m_needs_refresh) {
+        m_needs_refresh = false;
+        RefreshImpl();
+    }
+
+    DoLayout();
+}
+
+void EncyclopediaDetailPanel::RefreshImpl() {
     if (m_icon) {
         DeleteChild(m_icon);
         m_icon = 0;
@@ -2740,8 +2865,6 @@ void EncyclopediaDetailPanel::Refresh() {
 
     if (!detailed_description.empty())
         m_description_box->SetText(detailed_description);
-
-    DoLayout();
 
     m_description_panel->ScrollTo(GG::Y0);
 }
@@ -2858,6 +2981,12 @@ void EncyclopediaDetailPanel::SetFieldType(const std::string& field_type_name) {
     AddItem("ENC_FIELD_TYPE", field_type_name);
 }
 
+void EncyclopediaDetailPanel::SetMeterType(const std::string& meter_string) {
+    if (meter_string.empty())
+        return;
+    AddItem("ENC_METER_TYPE", meter_string);
+}
+
 void EncyclopediaDetailPanel::SetObject(int object_id) {
     int current_item_id = INVALID_OBJECT_ID;
     if (m_items_it != m_items.end()) {
@@ -2964,6 +3093,9 @@ void EncyclopediaDetailPanel::SetItem(const Empire* empire)
 
 void EncyclopediaDetailPanel::SetItem(const ShipDesign* design)
 { SetDesign(design ? design->ID() : ShipDesign::INVALID_DESIGN_ID); }
+
+void EncyclopediaDetailPanel::SetItem(const MeterType& meter_type)
+{ SetMeterType(boost::lexical_cast<std::string>(meter_type)); }
 
 void EncyclopediaDetailPanel::OnIndex()
 { AddItem(TextLinker::ENCYCLOPEDIA_TAG, "ENC_INDEX"); }

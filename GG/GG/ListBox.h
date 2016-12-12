@@ -34,8 +34,10 @@
 #include <GG/Control.h>
 #include <GG/Timer.h>
 
-#include <set>
+#include <boost/shared_ptr.hpp>
+#include <boost/unordered_set.hpp>
 
+#include <set>
 
 namespace GG {
 
@@ -82,7 +84,11 @@ extern GG_API const ListBoxStyle LIST_BROWSEUPDATES;  ///< Causes a signal to be
     LockColWidths() to prevent empty ListBoxes from taking on a new row's
     number of columns.  To create a ListBox with user-defined widths, use the
     ctor designed for that, or call SetNumCols(), set individual widths with
-    SetColWidth(), and lock the column widths with LockColWidths().
+    SetColWidth(), and lock the column widths with LockColWidths(). To create a
+    ListBox and manually control the column widths and alignment use
+    ManuallyManageColProps() and set the number of columns with SetNumCols().
+    Use DefineColWidths(), DefineColAlignments() and
+    DefineColStretches() to set widths and alignments from an exemplar row.
 
     <br>Note that Rows are stored by pointer.  If you want to move a Row from
     one ListBox to another, use GetRow() and Insert().
@@ -126,18 +132,6 @@ public:
         time. */
     struct GG_API Row : public Control
     {
-        /** Allows multiple mutators on a Row to be called, with only one call
-            to the sometimes-expensive Row::AdjustLayout made at the end.
-            Declare a DeferAdjustLayout on the stack before calling Row
-            mutators, and at the end of scope, when the DeferAdjustLayout is
-            destructed, Row::AdjustLayout is called. */
-        struct DeferAdjustLayout
-        {
-            DeferAdjustLayout(Row* row);
-            ~DeferAdjustLayout();
-            Row* const m_row;
-        };
-
         /** the type of key used to sort rows */
         typedef std::string SortKeyType;
 
@@ -152,13 +146,14 @@ public:
         std::size_t         size() const;                       ///< returns the number of Controls in this Row
         bool                empty() const;                      ///< returns true iff there are 0 Controls in this Row
 
-        virtual Control*    operator[](std::size_t n) const;    ///< returns the Control in the \a nth cell of this Row; not range checked
         virtual Control*    at(std::size_t n) const;            ///< returns the Control in the \a nth cell of this Row \throw std::range_error throws when size() <= \a n
 
         Alignment    RowAlignment() const;              ///< returns the vertical alignment of this Row
         Alignment    ColAlignment(std::size_t n) const; ///< returns the horizontal alignment of the Control in the \a nth cell of this Row; not range checked
         X            ColWidth(std::size_t n) const;     ///< returns the width of the \a nth cell of this Row; not range checked
         unsigned int Margin() const;                    ///< returns the amount of space left between the contents of adjacent cells, in pixels
+        /** Return true if the row is normalized.  Used by ListBox to track normalization.*/
+        bool         IsNormalized() const;
         //@}
 
         /** \name Mutators */ ///@{
@@ -174,22 +169,28 @@ public:
         void         SetColAlignment(std::size_t n, Alignment align); ///< sets the horizontal alignment of the Control in the \a nth cell of this Row; not range checked
         void         SetColWidth(std::size_t n, X width); ///< sets the width of the \a nth cell of this Row; not range checked
         void         SetColAlignments(const std::vector<Alignment>& aligns); ///< sets the horizontal alignment of all the Controls in this Row; not range checked
+        void         ClearColAlignments(); ///< Clear the horizontal alignments of the cells in this Row
         void         SetColWidths(const std::vector<X>& widths); ///< sets all the widths of the cells of this Row; not range checked
+        void         ClearColWidths(); ///< Clear the minimum widths of the cells of this Row.
+        void         SetColStretches(const std::vector<double>& stretches); ///< Set all column stretches.
         void         SetMargin(unsigned int margin); ///< sets the amount of space left between the contents of adjacent cells, in pixels
+        /** Set normalized.  Used by ListBox to track normalization.*/
+        void         SetNormalized(bool normalized);
         //@}
 
         boost::signals2::signal<void(const Pt&, GG::Flags<GG::ModKey>)> RightClickedSignal;
     protected:
-        void AdjustLayout(bool adjust_for_push_back = false);
         virtual void           RClick(const Pt& pt, GG::Flags<GG::ModKey> mod);
 
         std::vector<Control*>  m_cells;          ///< the Controls in this Row (each may be null)
         Alignment              m_row_alignment;  ///< row alignment; one of ALIGN_TOP, ALIGN_VCENTER, or ALIGN_BOTTOM
         std::vector<Alignment> m_col_alignments; ///< column alignments; each is one of ALIGN_TOP, ALIGN_VCENTER, or ALIGN_BOTTOM
         std::vector<X>         m_col_widths;     ///< column widths
+        std::vector<double>    m_col_stretches;  ///< the stretch factor of each column
         unsigned int           m_margin;         ///< the amount of space left between the contents of adjacent cells, in pixels
 
         bool                   m_ignore_adjust_layout;
+        bool                   m_is_normalized;
 
         friend struct DeferAdjustLayout;
     };
@@ -210,7 +211,12 @@ public:
         bool operator()(const iterator& lhs, const iterator& rhs) const;
     };
 
-    typedef std::set<iterator, RowPtrIteratorLess> SelectionSet;
+    struct IteratorHash : std::unary_function<iterator, std::size_t> {
+        std::size_t operator()(const iterator& it) const
+        { return boost::hash<const Row*>()(*it); }
+    };
+
+    typedef boost::unordered_set<iterator, IteratorHash> SelectionSet;
 
     /** \name Signal Types */ ///@{
     /** emitted when the list box is cleared */
@@ -234,6 +240,13 @@ public:
     typedef RowSignalType      BeforeEraseSignalType;    ///< emitted when a row in the listbox is erased; provides the deleted Row, and is emitted before the row is removed
     typedef RowSignalType      AfterEraseSignalType;     ///< emitted when a row in the listbox is erased; provides the deleted Row, and is emitted after the row is removed
     typedef RowSignalType      BrowsedSignalType;        ///< emitted when a row in the listbox is "browsed" (rolled over) by the cursor; provides the browsed row
+    //@}
+
+    /** \name Constants */ ///@{
+    static const int DEFAULT_MARGIN;
+    static const X DEFAULT_ROW_WIDTH;
+    static const Y DEFAULT_ROW_HEIGHT;
+    static const unsigned int BORDER_THICK; ///< the thickness with which to render the border of the control
     //@}
 
     /** \name Structors */ ///@{
@@ -274,6 +287,9 @@ public:
     /** Returns true iff column widths are fixed \see LockColWidths() */
     bool            KeepColWidths() const;
 
+    /** Return true if column width and alignment are not managed by ListBox. */
+    bool            ManuallyManagingColProps() const;
+
     /** Returns the index of the column used to sort rows, when sorting is
         enabled.  \note The sort column is not range checked when it is set by
         the user; it may be < 0 or >= NumCols(). */
@@ -281,6 +297,7 @@ public:
 
     X               ColWidth(std::size_t n) const;     ///< returns the width of column \a n in pixels; not range-checked
     Alignment       ColAlignment(std::size_t n) const; ///< returns the alignment of column \a n; must be ALIGN_LEFT, ALIGN_CENTER, or ALIGN_RIGHT; not range-checked
+    double          ColStretch(std::size_t n) const;   ///< Return the stretch factor of column \a n.
     Alignment       RowAlignment(iterator it) const;   ///< returns the alignment of row \a it; must be ALIGN_TOP, ALIGN_VCENTER, or ALIGN_BOTTOM; not range-checked
 
     /** Returns the set of data types allowed to be dropped over this ListBox
@@ -318,9 +335,14 @@ public:
     virtual void    StartingChildDragDrop(const Wnd* wnd, const GG::Pt& offset);
     virtual void    AcceptDrops(const Pt& pt, const std::vector<Wnd*>& wnds, Flags<ModKey> mod_keys);
     virtual void    ChildrenDraggedAway(const std::vector<Wnd*>& wnds, const Wnd* destination);
+    virtual void    PreRender();
     virtual void    Render();
 
     virtual void    SizeMove(const Pt& ul, const Pt& lr);  ///< resizes the control, then resizes the scrollbars as needed
+
+    /** Show the  list box.  If \p show_children is true then show the rows that are within the
+        boundaries of the list box.*/
+    virtual void    Show(bool show_children = true);
 
     virtual void    Disable(bool b = true);
     virtual void    SetColor(Clr c);
@@ -396,8 +418,16 @@ public:
         an empty ListBox */
     void            UnLockColWidths();
 
+    /** Set ListBox to stop managing column widths and alignment.  The number of columns must be
+        set with SetColWidth(), but widths of individual rows columns or the header will not be
+        managed by ListBox. */
+    void            ManuallyManageColProps();
+
     /** Sets the alignment of column \a n to \a align; not range-checked */
     void            SetColAlignment(std::size_t n, Alignment align);
+
+    /** Sets the stretch of column \a n to \a stretch; not range-checked */
+    void            SetColStretch(std::size_t n, double stretch);
 
     /** Sets the alignment of row \a it to \a align; not range-checked */
     void            SetRowAlignment(iterator it, Alignment align);
@@ -405,6 +435,15 @@ public:
     /** Sets whether to normalize rows when inserted (true) or leave them as
       * they are. */
     void            NormalizeRowsOnInsert(bool enable = true);
+
+    /** Sets the column widths from an exemplar \p row.*/
+    void            DefineColWidths(const Row& row);
+
+    /** Sets the column alignments from an exemplar \p row.*/
+    void            DefineColAlignments(const Row& row);
+
+    /** Sets the column alignments from an exemplar \p row.*/
+    void            DefineColStretches(const Row& row);
 
     /** Sets whether to add padding at the end of the scrolls when the ListBox is
      *  bigger than the client area, so that any row can be scrolled all the way to
@@ -448,8 +487,6 @@ public:
         bool operator()(const Row& lhs, const Row& rhs, std::size_t column) const;
     };
 
-    static const unsigned int BORDER_THICK; ///< the thickness with which to render the border of the control
-
     /** \name Exceptions */ ///@{
     /** The base class for ListBox exceptions. */
     GG_ABSTRACT_EXCEPTION(Exception);
@@ -485,15 +522,16 @@ protected:
     virtual void    DragDropEnter(const Pt& pt, std::map<const Wnd*, bool>& drop_wnds_acceptable, Flags<ModKey> mod_keys);
     virtual void    DragDropHere(const Pt& pt, std::map<const Wnd*, bool>& drop_wnds_acceptable, Flags<ModKey> mod_keys);
     virtual void    DragDropLeave();
+    virtual void    CancellingChildDragDrop(const std::vector<const Wnd*>& wnds);
     virtual void    TimerFiring(unsigned int ticks, Timer* timer);
 
     virtual bool    EventFilter(Wnd* w, const WndEvent& event);
 
+    /** Define the number of columns, the column widths and alignment from \p row.*/
     iterator        Insert(Row* row, iterator it, bool dropped, bool signal);                       ///< insertion sorts into list, or inserts into an unsorted list before \a it; returns insertion point
     void            Insert(const std::vector<Row*>& rows, iterator it, bool dropped, bool signal);  ///< insertion sorts into list, or inserts into an unsorted list before \a it; returns insertion point
     Row*            Erase(iterator it, bool removing_duplicate, bool signal); ///< erases the row at index \a idx, handling it as a duplicate removal (such as for drag-and-drops within a single ListBox) if indicated
     void            BringCaretIntoView();           ///< makes sure caret is visible when scrolling occurs due to keystrokes etc.
-    void            RecreateScrolls();              ///< recreates the vertical and horizontal scrolls as needed.
     void            ResetAutoScrollVars();          ///< resets all variables related to auto-scroll to their initial values
     void            Resort();                       ///< performs a full resort of all rows, using the current sort functor.
     Row&            ColHeaders();                   ///< returns the row containing the headings for the columns, if any.  If undefined, the returned heading Row will have size() 0. non-const for derivers
@@ -506,6 +544,9 @@ protected:
     void            HandleRowRightClicked(const Pt& pt, Flags<ModKey> mod);
 
 private:
+    /** Show only rows that are within the visible list box area and hide all others.  If
+        \p do_prerender is true then prerender the visible rows.*/
+    void            ShowVisibleRows(bool do_prerender);
     void            ConnectSignals();
     void            ValidateStyle();                                        ///< reconciles inconsistencies in the style flags
     void            VScrolled(int tab_low, int tab_high, int low, int high);///< signals from the vertical scroll bar are caught here
@@ -514,6 +555,12 @@ private:
     void            NormalizeRow(Row* row);                                 ///< adjusts a Row so that it has the same number of cells as other rows, and that each cell has the correct width and alignment
     iterator        FirstRowShownWhenBottomIs(iterator bottom_row, Y client_height); ///< Returns the first row shown when the last row shown is \a bottom_row
     std::size_t     FirstColShownWhenRightIs(std::size_t right_col, X client_width); ///< Returns the index of the first column shown when the last column shown is \a right_col
+
+    struct SelectionCache;
+    /** Cache the selected, clicked and last browsed rows.*/
+    boost::shared_ptr<SelectionCache> CacheSelections();
+    /** Restore cached selected, clicked and last browsed rows.*/
+    void RestoreCachedSelections(const SelectionCache& cache);
 
     std::list<Row*> m_rows;             ///< line item data
 
@@ -531,11 +578,15 @@ private:
     iterator        m_rclick_row;       ///< the row most recently right-clicked
     iterator        m_last_row_browsed; ///< the last row sent out as having been browsed (used to prevent duplicate browse signals)
 
+    GG::Pt          m_first_row_offset; ///< scrolled offset of the first row.
     iterator        m_first_row_shown;  ///< index of row at top of visible area (always begin() for non-empty ListBox with LIST_NOSCROLL set)
     std::size_t     m_first_col_shown;  ///< like above, but index of column at left
+    std::size_t     m_num_cols;         ///< the number of columns
     std::vector<X>  m_col_widths;       ///< the width of each of the columns goes here
-    std::vector<Alignment> 
+    std::vector<Alignment>
                     m_col_alignments;   ///< the horizontal alignment of each of the columns goes here
+    std::vector<double>
+                    m_col_stretches;    ///< the stretch factor of each column
     unsigned int    m_cell_margin;      ///< the amount of space left between each edge of the cell and its contents, in pixels
 
     Clr             m_int_color;        ///< color painted into the client area of the control
@@ -561,6 +612,7 @@ private:
     Timer           m_auto_scroll_timer;
 
     bool            m_normalize_rows_on_insert;
+    bool            m_manage_column_props;
 
     bool            m_add_padding_at_end;
 

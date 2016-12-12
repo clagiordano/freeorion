@@ -251,8 +251,9 @@ void FleetButton::Init(const std::vector<int>& fleet_IDs, SizeType size_type) {
         }
     }
 
-    // Create scanline renderer control
-    m_scanline_control = new ScanlineControl(GG::X0, GG::Y0, Width(), Height());
+    // Create scanline renderer control, use opposite color of fleet btn
+    GG::Clr opposite_clr(255 - Color().r, 255 - Color().g, 255 - Color().b, 64);
+    m_scanline_control = new ScanlineControl(GG::X0, GG::Y0, Width(), Height(), false, opposite_clr);
 
     if (!at_least_one_fleet_visible)
         AttachChild(m_scanline_control);
@@ -392,7 +393,7 @@ std::vector<boost::shared_ptr<GG::Texture> > FleetHeadIcons(const std::vector< T
         hasOutpostShips = hasOutpostShips || fleet->HasOutpostShips();
         hasTroopShips   = hasTroopShips   || fleet->HasTroopShips();
         hasMonsters     = hasMonsters     || fleet->HasMonsters();
-        hasArmedShips   = hasArmedShips   || fleet->HasArmedShips();
+        hasArmedShips   = hasArmedShips   || fleet->HasArmedShips() || fleet->HasFighterShips();
     }
 
     // get file name main part depending on type of fleet

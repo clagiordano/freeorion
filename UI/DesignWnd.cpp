@@ -106,7 +106,7 @@ namespace {
                 break;
             case PC_GENERAL:
             case PC_BOMBARD:
-            case PC_PRODICTION_LOCATION:
+            case PC_PRODUCTION_LOCATION:
             default:
                 return 0.0f;
         }
@@ -458,7 +458,7 @@ void PartsListBox::PartsListBoxRow::ChildrenDraggedAway(const std::vector<GG::Wn
     // find control in row
     unsigned int i = -1;
     for (i = 0; i < size(); ++i) {
-        dragged_control = (*this)[i];
+        dragged_control = !empty() ? at(i) : 0;
         if (dragged_control == control)
             break;
         else
@@ -492,7 +492,11 @@ PartsListBox::PartsListBox(void) :
     m_availabilities_shown(std::make_pair(false, false)),
     m_show_superfluous_parts(true),
     m_previous_num_columns(-1)
-{ SetStyle(GG::LIST_NOSEL); }
+{
+    ManuallyManageColProps();
+    NormalizeRowsOnInsert(false);
+    SetStyle(GG::LIST_NOSEL);
+}
 
 const std::set<ShipPartClass>& PartsListBox::GetClassesShown() const
 { return m_part_classes_shown; }
@@ -1355,11 +1359,12 @@ BasesListBox::HullPanel::HullPanel(GG::X w, GG::Y h, const std::string& hull) :
     m_graphic(0),
     m_name(0)
 {
+    SetChildClippingMode(ClipToClient);
     m_graphic = new GG::StaticGraphic(ClientUI::HullIcon(hull),
                                       GG::GRAPHIC_PROPSCALE | GG::GRAPHIC_FITGRAPHIC);
     m_graphic->Resize(GG::Pt(w, h));
     AttachChild(m_graphic);
-    m_name = new CUILabel(UserString(hull), GG::FORMAT_NOWRAP);
+    m_name = new CUILabel(UserString(hull), GG::FORMAT_WORDBREAK | GG::FORMAT_CENTER | GG::FORMAT_TOP);
     AttachChild(m_name);
 }
 
@@ -1368,7 +1373,7 @@ void BasesListBox::HullPanel::SizeMove(const GG::Pt& ul, const GG::Pt& lr) {
     if (m_graphic)
         m_graphic->Resize(Size());
     if (m_name)
-        m_name->Resize(GG::Pt(Width(), m_name->Height()));
+        m_name->Resize(Size());
 }
 
 BasesListBox::SavedDesignPanel::SavedDesignPanel(GG::X w, GG::Y h, const std::string& saved_design_name) :
@@ -1376,6 +1381,7 @@ BasesListBox::SavedDesignPanel::SavedDesignPanel(GG::X w, GG::Y h, const std::st
     m_graphic(0),
     m_name(0)
 {
+    SetChildClippingMode(ClipToClient);
     const ShipDesign* design = GetSavedDesignsManager().GetDesign(saved_design_name);
     if (design) {
         m_graphic = new GG::StaticGraphic(ClientUI::HullIcon(design->Hull()),
@@ -1383,7 +1389,7 @@ BasesListBox::SavedDesignPanel::SavedDesignPanel(GG::X w, GG::Y h, const std::st
         m_graphic->Resize(GG::Pt(w, h));
         AttachChild(m_graphic);
 
-        m_name = new CUILabel(design->Name(), GG::FORMAT_NOWRAP);
+        m_name = new CUILabel(design->Name(), GG::FORMAT_WORDBREAK | GG::FORMAT_CENTER | GG::FORMAT_TOP);
         AttachChild(m_name);
     }
 }
@@ -1393,7 +1399,7 @@ void BasesListBox::SavedDesignPanel::SizeMove(const GG::Pt& ul, const GG::Pt& lr
     if (m_graphic)
         m_graphic->Resize(Size());
     if (m_name)
-        m_name->Resize(GG::Pt(Width(), m_name->Height()));
+        m_name->Resize(Size());
 }
 
 BasesListBox::HullAndPartsListBoxRow::HullAndPartsListBoxRow(GG::X w, GG::Y h) :
@@ -1622,9 +1628,8 @@ GG::Pt BasesListBox::ListRowSize()
 void BasesListBox::InitRowSizes() {
     // preinitialize listbox/row column widths, because what
     // ListBox::Insert does on default is not suitable for this case
-    SetNumCols(1);
-    SetColWidth(0, GG::X0);
-    LockColWidths();
+    ManuallyManageColProps();
+    NormalizeRowsOnInsert(false);
 }
 
 void BasesListBox::PopulateWithEmptyHulls() {
@@ -1867,8 +1872,9 @@ void BasesListBox::BaseRightClicked(GG::ListBox::iterator it, const GG::Pt& pt, 
                 if (result != "" && result != design->Name()) {
                     HumanClientApp::GetApp()->Orders().IssueOrder(
                         OrderPtr(new ShipDesignOrder(client_empire_id, design_id, result)));
-                    ShipDesignPanel* design_panel = dynamic_cast<ShipDesignPanel*>((*design_row)[0]);
-                    design_panel->Update();
+                    if (!design_row->empty())
+                        if (ShipDesignPanel* design_panel = dynamic_cast<ShipDesignPanel*>(design_row->at(0)))
+                            design_panel->Update();
                 }
                 break;
             }

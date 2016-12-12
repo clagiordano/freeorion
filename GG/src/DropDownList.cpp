@@ -27,19 +27,31 @@
 #include <GG/GUI.h>
 #include <GG/DrawUtil.h>
 #include <GG/Scroll.h>
+#include <GG/Layout.h>
 #include <GG/StyleFactory.h>
 #include <GG/WndEvent.h>
 
+#include <boost/optional/optional.hpp>
 
 using namespace GG;
 
-class ModalListPicker : public Wnd
+class ModalListPicker : public Control
 {
 public:
     typedef ListBox::iterator iterator;
     typedef boost::signals2::signal<void (iterator)>   SelChangedSignalType;
 
-    ModalListPicker(Clr color, const Wnd* relative_to_wnd);
+    ModalListPicker(Clr color, const DropDownList* relative_to_wnd, size_t m_num_shown_rows);
+    ~ModalListPicker();
+
+    virtual bool   Run();
+    virtual void   EndRun();
+    bool           Dropped() const;
+    virtual void   Render() {}
+
+    /** Adjust the m_lb_wnd size so that there are no more than m_num_shown_rows shown. It will
+        not adjust a visible window, or if there is no relative to window. */
+    void CorrectListSize();
 
     virtual void LClick(const Pt& pt, Flags<ModKey> mod_keys);
     virtual void ModalInit();
@@ -50,15 +62,51 @@ public:
     const ListBox* LB() const
     { return m_lb_wnd; }
 
-    mutable SelChangedSignalType SelChangedSignal; ///< the selection change signal object for this DropDownList
+    /** The selection change signal while not running the modal drop down box.*/
+    mutable SelChangedSignalType SelChangedSignal;
+    /** The selection change signal while running the modal drop down box.*/
+    mutable SelChangedSignalType SelChangedWhileDroppedSignal;
+
+    DropDownList::iterator CurrentItem();
+
+    /** If \p it is not none then select \p it in the LB().  Return the newly selected iterator or none if
+        the selection did not change.*/
+    boost::optional<DropDownList::iterator> Select(boost::optional<DropDownList::iterator> it);
+
+    /** Call SelChangedSignal if \p it is not none. */
+    void SignalChanged(boost::optional<DropDownList::iterator> it);
+
+    /** A common KeyPress() for both ModalListPicker and its DropDownList.
+        Examine \p key and return the new list iterator or none.*/
+    boost::optional<DropDownList::iterator> KeyPressCommon(
+        Key key, boost::uint32_t key_code_point, Flags<ModKey> mod_keys);
+
+    /** A common MouseWheel() for both ModalListPicker and its DropDownList.
+        Examine \p pt and \p move and then return the new list iterator or none.*/
+    boost::optional<DropDownList::iterator> MouseWheelCommon(
+        const Pt& pt, int move, Flags<ModKey> mod_keys);
+
+protected:
+    /** ModalListPicker needs to process its own key press events because modal windows in GG
+        can't have parents. */
+    virtual void    KeyPress(Key key, boost::uint32_t key_code_point, Flags<ModKey> mod_keys);
+    /** ModalListPicker needs to process its own mouse events because modal windows in GG can't
+        have parents.*/
+    virtual void    MouseWheel(const Pt& pt, int move, Flags<ModKey> mod_keys);
 
 private:
     void LBSelChangedSlot(const ListBox::SelectionSet& rows);
 
     void LBLeftClickSlot(ListBox::iterator it, const GG::Pt& pt, const GG::Flags<GG::ModKey>& modkeys);
 
-    ListBox*    m_lb_wnd;
-    const Wnd*  m_relative_to_wnd;
+    /** Close the drop down if the app resizes, to prevent the modal drop down
+        list location not tracking the anchor.*/
+    void WindowResizedSlot(X x, Y y);
+
+    ListBox*            m_lb_wnd;
+    const size_t        m_num_shown_rows;
+    const DropDownList* m_relative_to_wnd;
+    bool                m_dropped; ///< Is the drop down list open.
 };
 
 namespace {
@@ -89,89 +137,347 @@ namespace {
         }
         ModalListPicker& m_picker;
     };
-
-    const int BORDER_THICK = 2; // should be the same as the BORDER_THICK value in GGListBox.h
 }
 
 ////////////////////////////////////////////////
 // ModalListPicker
 ////////////////////////////////////////////////
-ModalListPicker::ModalListPicker(Clr color, const Wnd* relative_to_wnd) :
-    Wnd(X0, Y0, GUI::GetGUI()->AppWidth(), GUI::GetGUI()->AppHeight(), INTERACTIVE | MODAL),
+ModalListPicker::ModalListPicker(Clr color, const DropDownList* relative_to_wnd, size_t num_rows) :
+    Control(X0, Y0, GUI::GetGUI()->AppWidth(), GUI::GetGUI()->AppHeight(), INTERACTIVE | MODAL),
     m_lb_wnd(GetStyleFactory()->NewDropDownListListBox(color, color)),
-    m_relative_to_wnd(relative_to_wnd)
+    m_num_shown_rows(std::max<std::size_t>(1, num_rows)),
+    m_relative_to_wnd(relative_to_wnd),
+    m_dropped(false)
 {
     Connect(m_lb_wnd->SelChangedSignal,     &ModalListPicker::LBSelChangedSlot, this);
     Connect(m_lb_wnd->LeftClickedSignal,    &ModalListPicker::LBLeftClickSlot,  this);
+    Connect(GUI::GetGUI()->WindowResizedSignal,
+            boost::bind(&ModalListPicker::WindowResizedSlot, this, _1, _2));
     AttachChild(m_lb_wnd);
 
     if (INSTRUMENT_ALL_SIGNALS)
         Connect(SelChangedSignal, ModalListPickerSelChangedEcho(*this));
+
+    if (m_relative_to_wnd)
+        m_lb_wnd->MoveTo(Pt(m_relative_to_wnd->Left(), m_relative_to_wnd->Bottom()));
+
+    m_lb_wnd->Hide();
 }
 
-void ModalListPicker::LClick(const Pt& pt, Flags<ModKey> mod_keys)
-{ m_done = true; }
+ModalListPicker::~ModalListPicker()
+{
+    // Shut down the ModalEventPump
+    EndRun();
+}
+
+bool ModalListPicker::Run() {
+    DropDownList::iterator old_current_item = CurrentItem();
+    bool retval = Wnd::Run();
+    m_dropped = false;
+    if (old_current_item != CurrentItem())
+        SignalChanged(CurrentItem());
+    return retval;
+}
 
 void ModalListPicker::ModalInit()
 {
-    if (m_relative_to_wnd)
-        m_lb_wnd->MoveTo(Pt(m_relative_to_wnd->Left(), m_relative_to_wnd->Bottom()));
+    m_dropped = true;
+
+    // Try to center the current item unless within half the number of
+    // shown rows from the top or bottom
+    if (CurrentItem() != m_lb_wnd->end() && !m_lb_wnd->Empty()) {
+        std::size_t current_ii(std::distance(m_lb_wnd->begin(), CurrentItem()));
+        std::size_t half_shown((m_num_shown_rows / 2));
+        std::size_t even_extra_one((m_num_shown_rows % 2 == 0) ? 1 : 0);
+
+        m_lb_wnd->SetFirstRowShown(m_lb_wnd->begin());
+        if (current_ii >= (m_lb_wnd->NumRows() - 1 - half_shown)) {
+            m_lb_wnd->BringRowIntoView(--m_lb_wnd->end());
+        } else if (current_ii >= half_shown) {
+            m_lb_wnd->SetFirstRowShown(
+                boost::next(m_lb_wnd->begin(),
+                            current_ii - half_shown + even_extra_one));
+        }
+    }
+
+    m_lb_wnd->Hide(); // to enable CorrectListSize() to work
+    CorrectListSize();
     Show();
 }
 
+void ModalListPicker::EndRun()
+{
+    Wnd::EndRun();
+    m_lb_wnd->Hide();
+}
+
+void ModalListPicker::WindowResizedSlot(X x, Y y)
+{
+    // Keep the ModalListPicker full app sized so that the drop down list
+    // can be placed anywhere.
+    Control::Resize(Pt(x, y));
+    if (m_dropped)
+        EndRun();
+}
+
+bool ModalListPicker::Dropped() const
+{ return m_dropped; }
+
+DropDownList::iterator ModalListPicker::CurrentItem()
+{ return (LB()->Selections().empty()) ?  LB()->end() : (*LB()->Selections().begin()); }
+
+boost::optional<DropDownList::iterator>  ModalListPicker::Select(boost::optional<DropDownList::iterator> it)
+{
+    if (!it)
+        return boost::none;
+
+    DropDownList::iterator old_m_current_item = CurrentItem();
+    if (*it == LB()->end()) {
+        LB()->DeselectAll();
+    } else {
+        LB()->SelectRow(*it);
+    }
+
+    return (CurrentItem() != old_m_current_item) ? boost::optional<DropDownList::iterator>(CurrentItem()) : boost::none;
+}
+
+void ModalListPicker::SignalChanged(boost::optional<DropDownList::iterator> it)
+{
+    if (!it)
+        return;
+
+    if (Dropped())
+        SelChangedWhileDroppedSignal(*it);
+    else
+        SelChangedSignal(*it);
+}
+
+void ModalListPicker::CorrectListSize() {
+    // reset size of displayed drop list based on number of shown rows set.
+    // assumes that all rows have the same height.
+    // adds some magic padding for now to prevent the scroll bars showing up.
+
+    if (!m_relative_to_wnd)
+        return;
+
+    if (LB()->Visible())
+        return;
+
+    LB()->MoveTo(Pt(m_relative_to_wnd->Left(), m_relative_to_wnd->Bottom()));
+
+    Pt drop_down_size(m_relative_to_wnd->DroppedRowWidth(), m_relative_to_wnd->ClientHeight());
+
+    if (LB()->Empty()) {
+        LB()->Resize(drop_down_size);
+    } else {
+        LB()->Show();
+
+        // The purpose of this code is to produce a drop down list that
+        // will be exactly m_num_shown_rows high and make sure that the
+        // selected row is prerendered in the same way when the drop down
+        // list is open or closed.
+
+        // The list needs to be resized twice.  The first resize with an
+        // estimated row height will add any list box chrome, like scroll
+        // bars to the list and may change the height of the row.  The
+        // second resize uses the corrected row height to finalize the drop
+        // down list size.
+
+        // Note:  Placing a tighter constraint on valid DropDownList rows
+        // of always returning the same fixed height regardless of status
+        // (width, prerender etc.) would mean this code could be reduced to
+        // check height and resize list just once.
+
+        drop_down_size.y = (*LB()->FirstRowShown())->Height() * std::min<int>(m_num_shown_rows, LB()->NumRows()) + 4;
+        LB()->Resize(drop_down_size);
+        if (!LB()->Selections().empty())
+            LB()->BringRowIntoView(*(LB()->Selections().begin()));
+        GUI::GetGUI()->PreRenderWindow(LB());
+
+        drop_down_size.y = (*LB()->FirstRowShown())->Height() * std::min<int>(m_num_shown_rows, LB()->NumRows()) + 4;
+        LB()->Resize(drop_down_size);
+        if (!LB()->Selections().empty())
+            LB()->BringRowIntoView(*(LB()->Selections().begin()));
+        GUI::GetGUI()->PreRenderWindow(LB());
+
+        LB()->Hide();
+    }
+}
+
+boost::optional<DropDownList::iterator> ModalListPicker::KeyPressCommon(
+    Key key, boost::uint32_t key_code_point, Flags<ModKey> mod_keys)
+{
+    bool numlock_on = mod_keys & MOD_KEY_NUM;
+    if (!numlock_on) {
+        // convert keypad keys into corresponding non-number keys
+        switch (key) {
+        case GGK_KP0:       key = GGK_INSERT;   break;
+        case GGK_KP1:       key = GGK_END;      break;
+        case GGK_KP2:       key = GGK_DOWN;     break;
+        case GGK_KP3:       key = GGK_PAGEDOWN; break;
+        case GGK_KP4:       key = GGK_LEFT;     break;
+        case GGK_KP5:                           break;
+        case GGK_KP6:       key = GGK_RIGHT;    break;
+        case GGK_KP7:       key = GGK_HOME;     break;
+        case GGK_KP8:       key = GGK_UP;       break;
+        case GGK_KP9:       key = GGK_PAGEUP;   break;
+        case GGK_KP_PERIOD: key = GGK_DELETE;   break;
+        default:                                break;
+        }
+    }
+
+    switch (key) {
+    case GGK_UP: // arrow-up (not numpad arrow)
+        if (CurrentItem() != LB()->end() && CurrentItem() != LB()->begin()) {
+            DropDownList::iterator prev_it(boost::prior(CurrentItem()));
+            LB()->BringRowIntoView(prev_it);
+            return prev_it;
+        }
+        break;
+    case GGK_DOWN: // arrow-down (not numpad arrow)
+        if (CurrentItem() != LB()->end() && CurrentItem() != --LB()->end()) {
+            DropDownList::iterator next_it(boost::next(CurrentItem()));
+            LB()->BringRowIntoView(next_it);
+            return next_it;
+        }
+        break;
+    case GGK_PAGEUP: // page up key (not numpad key)
+        if (!LB()->Empty() && CurrentItem() != LB()->end()) {
+            std::size_t i = std::max<std::size_t>(1, m_num_shown_rows - 1);
+            DropDownList::iterator it = CurrentItem();
+            while (i && it != LB()->begin()) {
+                --it;
+                --i;
+            }
+            LB()->BringRowIntoView(it);
+            return it;
+        }
+        break;
+    case GGK_PAGEDOWN: // page down key (not numpad key)
+        if (!LB()->Empty()) {
+            std::size_t i = std::max<std::size_t>(1, m_num_shown_rows - 1);
+            DropDownList::iterator it = CurrentItem();
+            while (i && it != --LB()->end()) {
+                ++it;
+                --i;
+            }
+            LB()->BringRowIntoView(it);
+            return it;
+        }
+        break;
+    case GGK_HOME: // home key (not numpad)
+        if (!LB()->Empty()) {
+            DropDownList::iterator it(LB()->begin());
+            LB()->BringRowIntoView(it);
+            return it;
+        }
+        break;
+    case GGK_END: // end key (not numpad)
+        if (!LB()->Empty()) {
+            DropDownList::iterator it(--LB()->end());
+            LB()->BringRowIntoView(it);
+            return it;
+        }
+        break;
+    case GGK_RETURN:
+    case GGK_KP_ENTER:
+    case GGK_ESCAPE:
+        EndRun();
+        return boost::none;
+        break;
+    default:
+        return boost::none;
+    }
+    return boost::none;
+}
+
+boost::optional<DropDownList::iterator> ModalListPicker::MouseWheelCommon(
+    const Pt& pt, int move, Flags<ModKey> mod_keys)
+{
+    DropDownList::iterator cur_it = CurrentItem();
+    if (cur_it == LB()->end())
+        return boost::none;
+    if (move == 0)
+        return boost::none;
+
+    if (move > 0) {
+        int dist_to_last = std::distance(cur_it, LB()->end()) - 1; // end is one past last valid item
+        if (move > dist_to_last)
+            move = dist_to_last;
+    } else {
+        int dist_from_first = std::distance(LB()->begin(), cur_it);// begin is the first valid item
+        if (-move > dist_from_first)
+            move = -dist_from_first;
+    }
+    if (move != 0) {
+        std::advance(cur_it, move);
+        return cur_it;
+    }
+    return boost::none;
+}
+
+void ModalListPicker::LClick(const Pt& pt, Flags<ModKey> mod_keys)
+{ EndRun(); }
+
 void ModalListPicker::LBSelChangedSlot(const ListBox::SelectionSet& rows)
 {
-    Hide();
     if (rows.empty()) {
-        SelChangedSignal(m_lb_wnd->end());
+        SignalChanged(m_lb_wnd->end());
     } else {
         ListBox::iterator sel_it = *rows.begin();
-        SelChangedSignal(sel_it);
+        SignalChanged(sel_it);
     }
-    m_done = true;
 }
 
 void ModalListPicker::LBLeftClickSlot(ListBox::iterator it, const GG::Pt& pt, const GG::Flags<GG::ModKey>& modkeys)
+{ EndRun(); }
+
+void ModalListPicker::KeyPress(Key key, boost::uint32_t key_code_point, Flags<ModKey> mod_keys)
 {
-    Hide();
-    m_done = true;
+    SignalChanged(Select(KeyPressCommon(key, key_code_point, mod_keys)));
 }
 
+void ModalListPicker::MouseWheel(const Pt& pt, int move, Flags<ModKey> mod_keys)
+{
+    if (!LB()->InWindow(pt))
+        return;
+    SignalChanged(Select(MouseWheelCommon(pt, move, mod_keys)));
+}
 
 ////////////////////////////////////////////////
 // GG::DropDownList
 ////////////////////////////////////////////////
 DropDownList::DropDownList(size_t num_shown_elements, Clr color) :
-    Control(X0, Y0, X1, Y1, INTERACTIVE),
-    m_modal_picker(new ModalListPicker(color, this)),
-    m_num_shown_elements(num_shown_elements)
+    Control(X0, Y0, X(1 + 2 * ListBox::BORDER_THICK), Y(1 + 2 * ListBox::BORDER_THICK), INTERACTIVE),
+    m_modal_picker(new ModalListPicker(color, this, num_shown_elements))
 {
     SetStyle(LIST_SINGLESEL);
 
     Connect(m_modal_picker->SelChangedSignal, SelChangedSignal);
+    Connect(m_modal_picker->SelChangedWhileDroppedSignal, SelChangedWhileDroppedSignal);
 
     if (INSTRUMENT_ALL_SIGNALS)
         Connect(SelChangedSignal, DropDownListSelChangedEcho(*this));
 
+    // InitBuffer here prevents a crash if DropDownList is constructed in
+    // the prerender phase.
     InitBuffer();
+
+    // Set a non zero client min size.
+    SetMinSize(Pt(X(1 + 2 * ListBox::BORDER_THICK), Y(1 + 2 * ListBox::BORDER_THICK)));
+
+    RequirePreRender();
 }
 
 DropDownList::~DropDownList() {
     if (m_modal_picker)
         m_modal_picker->EndRun();
-    DetachChild(m_modal_picker);
-    delete m_modal_picker;
 
     m_buffer.clear();
 }
 
 DropDownList::iterator DropDownList::CurrentItem() const
-{
-    if (m_modal_picker->LB()->Selections().empty())
-        return m_modal_picker->LB()->end();
-    else
-        return *m_modal_picker->LB()->Selections().begin();
-}
+{ return m_modal_picker->CurrentItem(); }
 
 std::size_t DropDownList::CurrentItemIndex() const
 { return IteratorToIndex(CurrentItem()); }
@@ -203,6 +509,9 @@ bool DropDownList::Selected(std::size_t n) const
 Clr DropDownList::InteriorColor() const
 { return LB()->InteriorColor(); }
 
+bool DropDownList::Dropped() const
+{ return m_modal_picker->Dropped(); }
+
 Y DropDownList::DropHeight() const
 { return LB()->Height(); }
 
@@ -228,17 +537,17 @@ Alignment DropDownList::RowAlignment(iterator it) const
 { return LB()->RowAlignment(it); }
 
 Pt DropDownList::ClientUpperLeft() const
-{ return UpperLeft() + Pt(X(BORDER_THICK), Y(BORDER_THICK)); }
+{ return UpperLeft() + Pt(X(ListBox::BORDER_THICK), Y(ListBox::BORDER_THICK)); }
 
 Pt DropDownList::ClientLowerRight() const
-{ return LowerRight() - Pt(X(BORDER_THICK), Y(BORDER_THICK)); }
+{ return LowerRight() - Pt(X(ListBox::BORDER_THICK), Y(ListBox::BORDER_THICK)); }
 
 void DropDownList::InitBuffer()
 {
     m_buffer.clear();
 
     GG::Pt lr = Size();
-    GG::Pt inner_ul = GG::Pt(GG::X(BORDER_THICK), GG::Y(BORDER_THICK));
+    GG::Pt inner_ul = GG::Pt(GG::X(ListBox::BORDER_THICK), GG::Y(ListBox::BORDER_THICK));
     GG::Pt inner_lr = lr - inner_ul;
 
     // outer border
@@ -260,6 +569,15 @@ void DropDownList::InitBuffer()
     m_buffer.store(lr.x,        0.0f);
 
     m_buffer.createServerBuffer();
+}
+
+void DropDownList::PreRender()
+{
+    GG::Control::PreRender();
+
+    InitBuffer();
+
+    m_modal_picker->CorrectListSize();
 }
 
 void DropDownList::Render()
@@ -289,7 +607,7 @@ void DropDownList::Render()
     }
 
     // draw beveled edges
-    if (BORDER_THICK && (border_color1 != CLR_ZERO || border_color2 != CLR_ZERO)) {
+    if (ListBox::BORDER_THICK && (border_color1 != CLR_ZERO || border_color2 != CLR_ZERO)) {
         // top left shadowed bevel
         glColor(border_color1);
         glDrawArrays(GL_QUAD_STRIP,     4, 6);
@@ -307,42 +625,62 @@ void DropDownList::Render()
     RenderDisplayedRow();
 }
 
+GG::X DropDownList::DroppedRowWidth() const
+{ return ClientWidth(); }
+
+GG::X DropDownList::DisplayedRowWidth() const
+{ return ClientWidth(); }
+
 void DropDownList::RenderDisplayedRow()
 {
     // Draw the ListBox::Row of currently displayed item, if any.
     if (CurrentItem() == LB()->end())
         return;
 
+    /** The following code possibly renders the selected row twice.  Once in the selected area and
+        also in the drop down list if it is visible.*/
     Row* current_item = *CurrentItem();
-    Pt offset = ClientUpperLeft() - current_item->UpperLeft();
-    bool visible = current_item->Visible();
-    current_item->OffsetMove(offset);
-    if (!visible)
+    bool sel_visible = current_item->Visible();
+    bool lb_visible = LB()->Visible();
+
+    // The following is necessary because neither LB() nor the selected row may be visible and
+    // prerendered.
+    if (!lb_visible)
+        LB()->Show();
+    GUI::GetGUI()->PreRenderWindow(LB());
+    if (!lb_visible)
+        LB()->Hide();
+
+    if (!sel_visible)
         current_item->Show();
+
+    // Vertically center the selected row in the box.
+    Pt offset = GG::Pt(ClientUpperLeft().x - current_item->ClientUpperLeft().x,
+                       Top() + Height() / 2 - (current_item->Top() + current_item->Height() / 2));
+    current_item->OffsetMove(offset);
+
+    GUI::GetGUI()->PreRenderWindow(current_item);
+
     BeginClipping();
     GUI::GetGUI()->RenderWindow(current_item);
     EndClipping();
+
     current_item->OffsetMove(-offset);
-    if (!visible)
+
+    if (!sel_visible)
         current_item->Hide();
 }
 
 void DropDownList::SizeMove(const Pt& ul, const Pt& lr)
 {
     // adjust size to keep correct height based on row height, etc.
-    GG::Pt sz = Size();
+    GG::Pt old_ul = RelativeUpperLeft();
+    GG::Pt old_lr = RelativeLowerRight();
+
     Wnd::SizeMove(ul, lr);
-    Pt drop_down_size(Width(), Height());
 
-    // reset size of displayed drop list based on number of shown rows set.
-    // assumes that all rows have the same height.
-    // adds some magic padding for now to prevent the scroll bars showing up.
-    if (LB()->NumRows() > 0)
-        drop_down_size.y = LB()->GetRow(0).Height() * std::min<int>(m_num_shown_elements, LB()->NumRows()) + 4;
-    LB()->SizeMove(Pt(X0, Height()), Pt(X0, Height()) + drop_down_size);
-
-    if (sz != Size())
-        InitBuffer();
+    if ((old_ul != RelativeUpperLeft()) || (old_lr != RelativeLowerRight()))
+        RequirePreRender();
 }
 
 void DropDownList::SetColor(Clr c)
@@ -353,6 +691,7 @@ DropDownList::iterator DropDownList::Insert(Row* row, iterator it, bool signal/*
     row->SetDragDropDataType("");
     DropDownList::iterator ret = LB()->Insert(row, it, signal);
     Resize(Size());
+    RequirePreRender();
     return ret;
 }
 
@@ -361,6 +700,7 @@ DropDownList::iterator DropDownList::Insert(Row* row, bool signal/* = true*/)
     row->SetDragDropDataType("");
     DropDownList::iterator ret = LB()->Insert(row, signal);
     Resize(Size());
+    RequirePreRender();
     return ret;
 }
 
@@ -371,6 +711,7 @@ void DropDownList::Insert(const std::vector<Row*>& rows, iterator it, bool signa
     { (*rows_it)->SetDragDropDataType(""); }
     LB()->Insert(rows, it, signal);
     Resize(Size());
+    RequirePreRender();
 }
 
 void DropDownList::Insert(const std::vector<Row*>& rows, bool signal/* = true*/)
@@ -380,6 +721,7 @@ void DropDownList::Insert(const std::vector<Row*>& rows, bool signal/* = true*/)
     { (*rows_it)->SetDragDropDataType(""); }
     LB()->Insert(rows, signal);
     Resize(Size());
+    RequirePreRender();
 }
 
 DropDownList::Row* DropDownList::Erase(iterator it, bool signal/* = false*/)
@@ -389,6 +731,7 @@ void DropDownList::Clear()
 {
     m_modal_picker->EndRun();
     LB()->Clear();
+    RequirePreRender();
 }
 
 DropDownList::iterator DropDownList::begin()
@@ -401,10 +744,10 @@ DropDownList::Row& DropDownList::GetRow(std::size_t n)
 { return LB()->GetRow(n); }
 
 void DropDownList::Select(iterator it)
-{ SelectImpl(it, false); }
+{ m_modal_picker->Select(it); }
 
 void DropDownList::Select(std::size_t n)
-{ SelectImpl(n < LB()->NumRows() ? boost::next(LB()->begin(), n) : LB()->end(), false); }
+{ m_modal_picker->Select(n < LB()->NumRows() ? boost::next(LB()->begin(), n) : LB()->end()); }
 
 void DropDownList::SetInteriorColor(Clr c)
 { LB()->SetInteriorColor(c); }
@@ -431,11 +774,20 @@ void DropDownList::LockColWidths()
 void DropDownList::UnLockColWidths()
 { LB()->UnLockColWidths(); }
 
+void DropDownList::ManuallyManageColProps()
+{ LB()->ManuallyManageColProps(); }
+
 void DropDownList::SetColAlignment(std::size_t n, Alignment align) 
 { LB()->SetColAlignment(n, align); }
 
-void DropDownList::SetRowAlignment(iterator it, Alignment align) 
+void DropDownList::SetRowAlignment(iterator it, Alignment align)
 { LB()->SetRowAlignment(it, align); }
+
+void DropDownList::SetColStretch(std::size_t n, double stretch)
+{ LB()->SetColStretch(n, stretch); }
+
+void DropDownList::NormalizeRowsOnInsert(bool enable /*= true*/)
+{ LB()->NormalizeRowsOnInsert(enable); }
 
 void DropDownList::LClick(const Pt& pt, Flags<ModKey> mod_keys)
 {
@@ -451,54 +803,19 @@ void DropDownList::LClick(const Pt& pt, Flags<ModKey> mod_keys)
     }
     LB()->m_first_col_shown = 0;
 
+    DropDownOpenedSignal(true);
     m_modal_picker->Run();
+    DropDownOpenedSignal(false);
 }
 
 void DropDownList::KeyPress(Key key, boost::uint32_t key_code_point, Flags<ModKey> mod_keys)
 {
     if (!Disabled()) {
-        switch (key) {
-        case GGK_UP: // arrow-up (not numpad arrow)
-            if (CurrentItem() != LB()->end() && CurrentItem() != LB()->begin())
-                SelectImpl(boost::prior(CurrentItem()), true);
-            break;
-        case GGK_DOWN: // arrow-down (not numpad arrow)
-            if (CurrentItem() != LB()->end() && CurrentItem() != --LB()->end())
-                SelectImpl(boost::next(CurrentItem()), true);
-            break;
-        case GGK_PAGEUP: // page up key (not numpad key)
-            if (LB()->NumRows() && CurrentItem() != LB()->end()) {
-                std::size_t i = 10;
-                iterator it = CurrentItem();
-                while (i && it != LB()->begin()) {
-                    --it;
-                    --i;
-                }
-                SelectImpl(it, true);
-            }
-            break;
-        case GGK_PAGEDOWN: // page down key (not numpad key)
-            if (LB()->NumRows()) {
-                std::size_t i = 10;
-                iterator it = CurrentItem();
-                while (i && it != --LB()->end()) {
-                    ++it;
-                    ++i;
-                }
-                SelectImpl(it, true);
-            }
-            break;
-        case GGK_HOME: // home key (not numpad)
-            if (LB()->NumRows())
-                SelectImpl(LB()->begin(), true);
-            break;
-        case GGK_END: // end key (not numpad)
-            if (LB()->NumRows() && !LB()->Empty())
-                SelectImpl(--LB()->end(), true);
-            break;
-        default:
+        boost::optional<DropDownList::iterator> key_selected = m_modal_picker->KeyPressCommon(key, key_code_point, mod_keys);
+        if (key_selected)
+            m_modal_picker->SignalChanged(m_modal_picker->Select(key_selected));
+        else
             Control::KeyPress(key, key_code_point, mod_keys);
-        }
     } else {
         Control::KeyPress(key, key_code_point, mod_keys);
     }
@@ -507,29 +824,7 @@ void DropDownList::KeyPress(Key key, boost::uint32_t key_code_point, Flags<ModKe
 void DropDownList::MouseWheel(const Pt& pt, int move, Flags<ModKey> mod_keys)
 {
     if (!Disabled()) {
-        if (CurrentItem() == LB()->end())
-            return;
-        if (move == 0)
-            return;
-
-        //std::cout << "DropDownList::MouseWheel move: " << move << std::endl;
-
-        DropDownList::iterator cur_it = CurrentItem();
-
-        if (move > 0) {
-            int dist_to_last = std::distance(cur_it, end()) - 1; // end is one past last valid item
-            if (move > dist_to_last)
-                move = dist_to_last;
-        } else {
-            int dist_from_first = std::distance(begin(), cur_it);// begin is the first valid item
-            if (-move > dist_from_first)
-                move = -dist_from_first;
-        }
-        if (move != 0) {
-            std::advance(cur_it, move);
-            SelectImpl(cur_it, true);
-        }
-
+        m_modal_picker->SignalChanged(m_modal_picker->Select(m_modal_picker->MouseWheelCommon(pt, -move, mod_keys)));
     } else {
         Control::MouseWheel(pt, move, mod_keys);
     }
@@ -540,16 +835,3 @@ ListBox* DropDownList::LB()
 
 const ListBox* DropDownList::LB() const
 { return m_modal_picker->LB(); }
-
-void DropDownList::SelectImpl(iterator it, bool signal)
-{
-    iterator old_m_current_item = CurrentItem();
-    if (it == LB()->end()) {
-        LB()->DeselectAll();
-    } else {
-        LB()->SelectRow(it);
-    }
-
-    if (signal && CurrentItem() != old_m_current_item)
-        SelChangedSignal(CurrentItem());
-}

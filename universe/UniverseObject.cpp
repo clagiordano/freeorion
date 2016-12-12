@@ -223,7 +223,7 @@ std::string UniverseObject::Dump() const {
         os << "(" << it->first << ", " << it->second.first << ", " << it->second.second << ") ";
     os << "  Meters: ";
     for (std::map<MeterType, Meter>::const_iterator it = m_meters.begin(); it != m_meters.end(); ++it)
-        os << UserString(EnumToString(it->first))
+        os << it->first
            << ": " << it->second.Dump() << "  ";
     return os.str();
 }
@@ -290,10 +290,10 @@ void UniverseObject::AddMeter(MeterType meter_type) {
 }
 
 bool UniverseObject::Unowned() const
-{ return m_owner_empire_id == ALL_EMPIRES; }
+{ return Owner() == ALL_EMPIRES; }
 
 bool UniverseObject::OwnedBy(int empire) const
-{ return empire != ALL_EMPIRES && empire == m_owner_empire_id; }
+{ return empire != ALL_EMPIRES && empire == Owner(); }
 
 Visibility UniverseObject::GetVisibility(int empire_id) const
 { return GetUniverse().GetObjectVisibilityByEmpire(this->ID(), empire_id); }

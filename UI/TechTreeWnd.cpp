@@ -312,7 +312,7 @@ TechTreeWnd::TechTreeControls::TechTreeControls(const std::string& config_name) 
 
     m_status_buttons[TS_RESEARCHABLE] = new GG::StateButton("", ClientUI::GetFont(), GG::FORMAT_NONE, GG::CLR_ZERO,
                                                             boost::make_shared<CUIIconButtonRepresenter>(boost::make_shared<GG::SubTexture>(ClientUI::GetTexture(icon_dir / "03_unlocked.png", true)), icon_color));
-    m_status_buttons[TS_RESEARCHABLE]->SetBrowseInfoWnd(boost::make_shared<TextBrowseWnd>(UserString("TECH_WND_STATUS_PARTIAL_UNLOCK"), ""));
+    m_status_buttons[TS_RESEARCHABLE]->SetBrowseInfoWnd(boost::make_shared<TextBrowseWnd>(UserString("TECH_WND_STATUS_RESEARCHABLE"), ""));
     m_status_buttons[TS_RESEARCHABLE]->SetBrowseModeTime(tooltip_delay);
     m_status_buttons[TS_RESEARCHABLE]->SetCheck(true);
     AttachChild(m_status_buttons[TS_RESEARCHABLE]);
@@ -1680,11 +1680,11 @@ void TechTreeWnd::TechListBox::TechRow::Update() {
         return;
 
     std::string cost_str = boost::lexical_cast<std::string>(static_cast<int>(this_row_tech->ResearchCost(HumanClientApp::GetApp()->EmpireID()) + 0.5));
-    if (GG::TextControl* tc = dynamic_cast<GG::TextControl*>((*this)[2]))
+    if (GG::TextControl* tc = dynamic_cast<GG::TextControl*>((size() >= 3) ? at(2) : 0))
         tc->SetText(cost_str);
 
     std::string time_str = boost::lexical_cast<std::string>(this_row_tech->ResearchTime(HumanClientApp::GetApp()->EmpireID()));
-    if (GG::TextControl* tc = dynamic_cast<GG::TextControl*>((*this)[3]))
+    if (GG::TextControl* tc = dynamic_cast<GG::TextControl*>((size() >= 4) ? at(3) : 0))
         tc->SetText(time_str);
 }
 
@@ -1903,12 +1903,13 @@ void TechTreeWnd::TechListBox::TechDoubleClicked(GG::ListBox::iterator it, const
 //////////////////////////////////////////////////
 // TechTreeWnd                                  //
 //////////////////////////////////////////////////
-TechTreeWnd::TechTreeWnd(GG::X w, GG::Y h) :
+TechTreeWnd::TechTreeWnd(GG::X w, GG::Y h, bool initially_hidden /*= true*/) :
     GG::Wnd(GG::X0, GG::Y0, w, h, GG::INTERACTIVE),
     m_tech_tree_controls(0),
     m_enc_detail_panel(0),
     m_layout_panel(0),
-    m_tech_list(0)
+    m_tech_list(0),
+    m_init_flag(initially_hidden)
 {
     Sound::TempUISoundDisabler sound_disabler;
 
@@ -1959,11 +1960,16 @@ TechTreeWnd::TechTreeWnd(GG::X w, GG::Y h) :
     // connect view type selector
     GG::Connect(m_tech_tree_controls->m_view_type_button->CheckedSignal, &TechTreeWnd::ToggleViewType, this);
 
-    ShowAllCategories();
-    ShowStatus(TS_RESEARCHABLE);
-    ShowStatus(TS_HAS_RESEARCHED_PREREQ);
-    ShowStatus(TS_COMPLETE);
-    // leave unresearchable hidden by default
+    //TechTreeWnd in typically constructed before the UI client has
+    //accesss to the technologies so showing these categories takes a
+    //long time and generates errors, but is never seen by the user.
+    if (!m_init_flag) {
+        ShowAllCategories();
+        ShowStatus(TS_RESEARCHABLE);
+        ShowStatus(TS_HAS_RESEARCHED_PREREQ);
+        ShowStatus(TS_COMPLETE);
+        // leave unresearchable hidden by default
+    }
 
     ShowTreeView();
 }
@@ -2019,6 +2025,22 @@ void TechTreeWnd::InitializeWindows() {
 
     m_enc_detail_panel->InitSizeMove(pedia_ul,  pedia_ul + pedia_wh);
     m_tech_tree_controls->InitSizeMove(controls_ul,  controls_ul + controls_wh);
+}
+
+void TechTreeWnd::Show(bool children) {
+    GG::Wnd::Show(children);
+
+    // When Show() is called for TechTree the ClientUI should now have
+    // access to the technologies so that parsing does not generate
+    // errors.
+    if (m_init_flag) {
+        m_init_flag = false;
+        ShowAllCategories();
+        ShowStatus(TS_RESEARCHABLE);
+        ShowStatus(TS_HAS_RESEARCHED_PREREQ);
+        ShowStatus(TS_COMPLETE);
+        // leave unresearchable hidden by default
+    }
 }
 
 void TechTreeWnd::ShowCategory(const std::string& category) {

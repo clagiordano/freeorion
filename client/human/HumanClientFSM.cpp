@@ -60,13 +60,7 @@ IntroMenu::IntroMenu(my_context ctx) :
 {
     if (TRACE_EXECUTION) DebugLogger() << "(HumanClientFSM) IntroMenu";
     Client().KillServer();
-
-    Client().Remove(Client().GetClientUI()->GetMapWnd());
-    Client().GetClientUI()->GetMapWnd()->Hide();
-
-    Client().Register(Client().GetClientUI()->GetIntroScreen());
-    Client().Remove(Client().GetClientUI()->GetMessageWnd());
-    Client().Remove(Client().GetClientUI()->GetPlayerListWnd());
+    Client().GetClientUI()->ShowIntroScreen();
 }
 
 IntroMenu::~IntroMenu() {
@@ -121,6 +115,9 @@ boost::statechart::result WaitingForSPHostAck::react(const Error& msg) {
 
     ErrorLogger() << "WaitingForSPHostAck::react(const Error& msg) error: " << problem;
 
+    //Note: transit<> frees this pointer so Client() must be called before.
+    HumanClientApp& client = Client();
+
     //Note: Any transit<> transition must occur before the MessageBox().
     // MessageBox blocks and can allow other events to transit<> to a new state
     // which makes this transit fatal.
@@ -128,7 +125,7 @@ boost::statechart::result WaitingForSPHostAck::react(const Error& msg) {
 
     if (fatal) {
         ClientUI::MessageBox(UserString(problem), true);
-        Client().GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
+        client.GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
     }
 
     return retval;
@@ -162,6 +159,9 @@ boost::statechart::result WaitingForMPHostAck::react(const Error& msg) {
 
     ErrorLogger() << "WaitingForMPHostAck::react(const Error& msg) error: " << problem;
 
+    //Note: transit<> frees this pointer so Client() must be called before.
+    HumanClientApp& client = Client();
+
     //Note: Any transit<> transition must occur before the MessageBox().
     // MessageBox blocks and can allow other events to transit<> to a new state
     // which makes this transit fatal.
@@ -169,7 +169,7 @@ boost::statechart::result WaitingForMPHostAck::react(const Error& msg) {
 
     if (fatal) {
         ClientUI::MessageBox(UserString(problem), true);
-        Client().GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
+        client.GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
     }
 
     return retval;
@@ -202,6 +202,9 @@ boost::statechart::result WaitingForMPJoinAck::react(const Error& msg) {
 
     ErrorLogger() << "WaitingForMPJoinAck::react(const Error& msg) error: " << problem;
 
+    //Note: transit<> frees this pointer so Client() must be called before.
+    HumanClientApp& client = Client();
+
     //Note: Any transit<> transition must occur before the MessageBox().
     // MessageBox blocks and can allow other events to transit<> to a new state
     // which makes this transit fatal.
@@ -209,7 +212,7 @@ boost::statechart::result WaitingForMPJoinAck::react(const Error& msg) {
 
     if (fatal) {
         ClientUI::MessageBox(UserString(problem), true);
-        Client().GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
+        client.GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
     }
 
     return retval;
@@ -238,7 +241,6 @@ boost::statechart::result MPLobby::react(const Disconnection& d) {
     // which makes this transit fatal.
     boost::statechart::result retval = transit<IntroMenu>();
     ClientUI::MessageBox(UserString("SERVER_LOST"), true);
-    Client().Remove(Client().GetClientUI()->GetMultiPlayerLobbyWnd());
     return retval;
 }
 
@@ -278,8 +280,6 @@ boost::statechart::result MPLobby::react(const LobbyChat& msg) {
 boost::statechart::result MPLobby::react(const CancelMPGameClicked& a)
 {
     if (TRACE_EXECUTION) DebugLogger() << "(HumanClientFSM) MPLobby.CancelMPGameClicked";
-    HumanClientApp::GetApp()->Networking().DisconnectFromServer();
-    Client().Remove(Client().GetClientUI()->GetMultiPlayerLobbyWnd());
     return transit<IntroMenu>();
 }
 
@@ -319,10 +319,8 @@ boost::statechart::result MPLobby::react(const Error& msg) {
     // which makes this transit fatal.
     boost::statechart::result retval = fatal ? transit<IntroMenu>() : discard_event();
 
-    if (fatal) {
+    if (fatal)
         ClientUI::MessageBox(UserString(problem), true);
-        Client().Remove(Client().GetClientUI()->GetMultiPlayerLobbyWnd());
-    }
 
     return retval;
 }
@@ -385,10 +383,6 @@ boost::statechart::result PlayingGame::react(const Disconnection& d) {
     // which makes this transit fatal.
     boost::statechart::result retval = transit<IntroMenu>();
     ClientUI::MessageBox(UserString("SERVER_LOST"), true);
-    Client().Remove(Client().GetClientUI()->GetMapWnd());
-    Client().GetClientUI()->GetMapWnd()->RemoveWindows();
-    Client().Networking().SetHostPlayerID(Networking::INVALID_PLAYER_ID);
-    Client().Networking().SetPlayerID(Networking::INVALID_PLAYER_ID);
     return retval;
 }
 
@@ -449,10 +443,6 @@ boost::statechart::result PlayingGame::react(const EndGame& msg) {
     // which makes this transit fatal.
     boost::statechart::result retval = transit<IntroMenu>();
     ClientUI::MessageBox(reason_message, error);
-    Client().Remove(Client().GetClientUI()->GetMapWnd());
-    Client().GetClientUI()->GetMapWnd()->RemoveWindows();
-    Client().Networking().SetHostPlayerID(Networking::INVALID_PLAYER_ID);
-    Client().Networking().SetPlayerID(Networking::INVALID_PLAYER_ID);
     return retval;
 }
 
@@ -460,10 +450,6 @@ boost::statechart::result PlayingGame::react(const ResetToIntroMenu& msg) {
     if (TRACE_EXECUTION) DebugLogger() << "(HumanClientFSM) PlayingGame.ResetToIntroMenu";
 
     Client().GetClientUI()->GetMessageWnd()->HandleGameStatusUpdate(UserString("RETURN_TO_INTRO") + "\n");
-    Client().Remove(Client().GetClientUI()->GetMapWnd());
-    Client().GetClientUI()->GetMapWnd()->RemoveWindows();
-    Client().Networking().SetHostPlayerID(Networking::INVALID_PLAYER_ID);
-    Client().Networking().SetPlayerID(Networking::INVALID_PLAYER_ID);
     return transit<IntroMenu>();
 }
 
@@ -476,6 +462,9 @@ boost::statechart::result PlayingGame::react(const Error& msg) {
     ErrorLogger() << "PlayingGame::react(const Error& msg) error: "
                   << problem << "\nProblem is" <<(fatal ? "":"non-")<<" fatal";
 
+    //Note: transit<> frees this pointer so Client() must be called before.
+    HumanClientApp& client = Client();
+
     //Note: Any transit<> transition must occur before the MessageBox().
     // MessageBox blocks and can allow other events to transit<> to a new state
     // which makes this transit fatal.
@@ -484,13 +473,7 @@ boost::statechart::result PlayingGame::react(const Error& msg) {
 
     if (fatal) {
         ClientUI::MessageBox(UserString(problem), true);
-        Client().EndGame(true);
-        Client().GetClientUI()->GetMessageWnd()->Hide();
-        Client().GetClientUI()->GetPlayerListWnd()->Hide();
-        Client().Remove(Client().GetClientUI()->GetMapWnd());
-        Client().GetClientUI()->GetMapWnd()->RemoveWindows();
-        Client().Networking().SetHostPlayerID(Networking::INVALID_PLAYER_ID);
-        Client().Networking().SetPlayerID(Networking::INVALID_PLAYER_ID);
+        client.EndGame(true);
     }
     return retval;
 }

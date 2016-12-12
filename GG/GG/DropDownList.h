@@ -34,6 +34,8 @@
 #include <GG/ListBox.h>
 #include <GG/GLClientAndServerBuffer.h>
 
+#include <boost/scoped_ptr.hpp>
+
 class ModalListPicker;
 
 namespace GG {
@@ -50,7 +52,16 @@ namespace GG {
     DropDownList.  Though you can still set the alignment, etc. of individual
     rows, as in ListBox, the currently-selected row will have the same
     alignment, etc. when displayed in the control in its unopened state.  Note
-    that this may look quite ugly. */
+    that this may look quite ugly.
+
+    On selection DropDownList emits one of two signals, SelChangedSignal or
+    SelChangedWhileDroppedSignal.  SelChangedWhileDroppedSignal is emitted
+    when the selection changes while running a ModalEventPump to display the
+    drop down list and handle its events.
+
+    SelChangedSignal will also be emitted when the drop down list closes if
+    the selected item changed.
+*/
 class GG_API DropDownList : public Control
 {
 public:
@@ -64,6 +75,9 @@ public:
     /** emitted when a new item is selected; will be end() when no item is
       * selected */
     typedef boost::signals2::signal<void (iterator)>   SelChangedSignalType;
+
+    /** Signal \a true when drop down opens and false when it closes.*/
+    typedef boost::signals2::signal<void (bool)>       DropDownOpenedSignalType;
     //@}
 
     /** \name Structors */ ///@{
@@ -91,6 +105,7 @@ public:
     Clr             InteriorColor() const;          ///< returns the color painted into the client area of the control
 
     Y               DropHeight() const; ///< returns the height of the drop-down list
+    bool            Dropped() const;                ///< Return true if the drop down list is open.
 
     /** Returns the style flags of the list \see GG::ListBoxStyle */
     Flags<ListBoxStyle> Style() const;
@@ -110,10 +125,26 @@ public:
     virtual Pt      ClientUpperLeft() const;
     virtual Pt      ClientLowerRight() const;
 
-    mutable SelChangedSignalType SelChangedSignal; ///< the selection change signal object for this DropDownList
+    /** Return the width of the displayed row.  Override this function if the displayed row is a
+        different width than the client width.*/
+    virtual GG::X  DisplayedRowWidth() const;
+
+    /** Return the width of the dropped row.  Override this function if the dropped row is a
+        different width than the client width.*/
+    virtual GG::X  DroppedRowWidth() const;
+
+    /** The selection change signal while not running the modal drop down box.
+        This will also signal an event when the drop list closes if the selection changed.
+     */
+    mutable SelChangedSignalType SelChangedSignal;
+    /** The selection change signal while running the modal drop down box.*/
+    mutable SelChangedSignalType SelChangedWhileDroppedSignal;
+
+    DropDownOpenedSignalType DropDownOpenedSignal;
     //@}
 
     /** \name Mutators */ ///@{
+    virtual void    PreRender();
     virtual void    Render();
     virtual void    SizeMove(const Pt& ul, const Pt& lr); ///< resizes the control, ensuring the proper height is maintained based on the list's row height
     virtual void    SetColor(Clr c);
@@ -170,8 +201,20 @@ public:
         to an empty ListBox */
     void            UnLockColWidths();
 
+    /** Set ListBox to stop managing column widths and alignment.  The number of columns must be
+        set with SetColWidth(), but widths of individual rows columns or the header will not be
+        managed by ListBox. */
+    void            ManuallyManageColProps();
+
     void            SetColAlignment(std::size_t n, Alignment align); ///< sets the alignment of column \a n to \a align; not range-checked
     void            SetRowAlignment(iterator it, Alignment align);   ///< sets the alignment of the Row at row index \a n to \a align; not range-checked
+
+    /** Sets the stretch of column \a n to \a stretch; not range-checked */
+    void            SetColStretch(std::size_t n, double stretch);
+
+    /** Sets whether to normalize rows when inserted (true) or leave them as
+      * they are. */
+    void            NormalizeRowsOnInsert(bool enable = true);
     //@}
 
 protected:
@@ -189,11 +232,10 @@ protected:
     //@}
 
 private:
-    void            SelectImpl(iterator it, bool signal);
     const ListBox*  LB() const;
 
-    ModalListPicker*    m_modal_picker;
-    size_t              m_num_shown_elements;
+    // TODO use C++11 unique_ptr
+    boost::scoped_ptr<ModalListPicker> const    m_modal_picker;
 };
 
 } // namespace GG

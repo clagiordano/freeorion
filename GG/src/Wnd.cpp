@@ -177,7 +177,6 @@ boost::shared_ptr<BrowseInfoWnd> Wnd::s_default_browse_info_wnd;
 Wnd::Wnd() :
     m_done(false),
     m_parent(0),
-    m_zorder(0),
     m_visible(true),
     m_child_clipping_mode(DontClip),
     m_non_client_child(false),
@@ -194,7 +193,6 @@ Wnd::Wnd() :
 Wnd::Wnd(X x, Y y, X w, Y h, Flags<WndFlag> flags/* = INTERACTIVE | DRAGABLE*/) :
     m_done(false),
     m_parent(0),
-    m_zorder(0),
     m_visible(true),
     m_child_clipping_mode(DontClip),
     m_non_client_child(false),
@@ -320,9 +318,6 @@ X Wnd::Width() const
 Y Wnd::Height() const
 { return m_lowerright.y - m_upperleft.y; }
 
-int Wnd::ZOrder() const
-{ return m_zorder; }
-
 Pt Wnd::Size() const
 { return Pt(m_lowerright.x - m_upperleft.x, m_lowerright.y - m_upperleft.y); }
 
@@ -419,7 +414,7 @@ WndRegion Wnd::WindowRegion(const Pt& pt) const
     return (Resizable() ? WndRegion(x_pos + 3 * y_pos) : WR_NONE);
 }
 
-void Wnd::CorrectPositionOfSizeMove(Pt& ul, Pt& lr) const
+void Wnd::ClampRectWithMinAndMaxSize(Pt& ul, Pt& lr) const
 {
     Pt min_sz = MinSize();
     Pt max_sz = MaxSize();
@@ -519,9 +514,9 @@ void Wnd::SizeMove(const Pt& ul_, const Pt& lr_)
 {
     Pt ul = ul_, lr = lr_;
     Pt original_sz = Size();
-    bool resized = (original_sz.x != (lr.x - ul.x)) || (original_sz.y != (lr.y - ul.y));
+    bool resized = (original_sz != (lr - ul));
     if (resized)
-        CorrectPositionOfSizeMove(ul, lr);
+        ClampRectWithMinAndMaxSize(ul, lr);
 
     m_upperleft = ul;
     m_lowerright = lr;
